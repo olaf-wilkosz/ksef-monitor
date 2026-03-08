@@ -1,0 +1,32 @@
+{
+	"manifest_version": 3,
+	"name": "KSeF Monitor",
+	"version": "1.0.0",
+	"description": "Powiadomienia o nowych fakturach w Krajowym Systemie e-Faktur (KSeF API 2.0)",
+	"permissions": ["alarms", "storage", "notifications"],
+	"host_permissions": [
+		"https://api.ksef.mf.gov.pl/*",
+		"https://api-demo.ksef.mf.gov.pl/*",
+		"https://api-test.ksef.mf.gov.pl/*",
+		"https://wl-api.mf.gov.pl/*"
+	],
+	"background": {
+		"service_worker": "background.js",
+		"type": "module"
+	},
+	"action": {
+		"default_popup": "popup.html",
+		"default_icon": {
+			"16": "icons/icon16.png",
+			"48": "icons/icon48.png"
+		},
+		"default_title": "KSeF Monitor"
+	},
+	"icons": {
+		"16": "icons/icon16.png",
+		"48": "icons/icon48.png",
+		"128": "icons/icon128.png"
+	},
+	"homepage_url": "https://github.com/olaf-wilkosz/ksef-monitor",
+	"author": "ksef-monitor@pm.me"
+}

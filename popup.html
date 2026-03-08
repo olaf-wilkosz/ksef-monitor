@@ -1,0 +1,1217 @@
+<!doctype html>
+<html lang="pl">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>KSeF Monitor</title>
+		<style>
+			*,
+			*::before,
+			*::after {
+				box-sizing: border-box;
+				margin: 0;
+				padding: 0;
+			}
+
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+				font-size: 14px;
+				color: #1a1a2e;
+				background: #fff;
+				width: 340px;
+			}
+
+			/* ── Header ── */
+			.header {
+				background: linear-gradient(135deg, #dc0032, #a0001f);
+				color: white;
+				padding: 11px 14px;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+			}
+			.header-title {
+				font-size: 15px;
+				font-weight: 600;
+				display: flex;
+				align-items: center;
+				gap: 7px;
+			}
+			.header-env {
+				font-size: 10px;
+				background: rgba(255, 255, 255, 0.2);
+				padding: 2px 7px;
+				border-radius: 10px;
+				text-transform: uppercase;
+			}
+
+			/* ── Views ── */
+			.view {
+				display: none;
+			}
+			.view.active {
+				display: block;
+			}
+
+			/* ── Setup ── */
+			.setup-wrap {
+				padding: 16px;
+			}
+			.setup-info {
+				background: #e8f0f8;
+				border-radius: 8px;
+				padding: 12px;
+				font-size: 12px;
+				color: #012d52;
+				margin-bottom: 14px;
+				line-height: 1.5;
+			}
+
+			/* ── PIN ── */
+			.pin-wrap {
+				padding: 16px;
+				text-align: center;
+			}
+			.pin-title {
+				font-size: 14px;
+				font-weight: 600;
+				margin-bottom: 4px;
+			}
+			.pin-hint {
+				font-size: 12px;
+				color: #777;
+				margin-bottom: 12px;
+			}
+			.pin-input {
+				width: 100%;
+				border: 1.5px solid #ddd;
+				border-radius: 8px;
+				padding: 9px 12px;
+				font-size: 13px;
+				outline: none;
+				transition: border-color 0.15s;
+			}
+			.pin-input:focus {
+				border-color: #013f71;
+			}
+			.pin-error {
+				color: #c62828;
+				font-size: 12px;
+				margin-top: 6px;
+				display: none;
+			}
+			.otp-row {
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				gap: 8px;
+				margin-bottom: 10px;
+			}
+			.otp-box {
+				width: 48px;
+				height: 54px;
+				border: 1.5px solid #ddd;
+				border-radius: 8px;
+				text-align: center;
+				font-size: 20px;
+				outline: none;
+				transition:
+					border-color 0.15s,
+					background 0.15s;
+				background: #fafbff;
+				padding: 0;
+				font-family: inherit;
+			}
+			.otp-box:focus {
+				border-color: #013f71;
+				box-shadow: 0 0 0 3px rgba(1, 63, 113, 0.08);
+			}
+			.otp-box.filled {
+				border-color: #013f71;
+				background: #e8f0f8;
+			}
+			.otp-toggle {
+				background: none;
+				border: none;
+				cursor: pointer;
+				font-size: 16px;
+				color: #bbb;
+				padding: 4px;
+				line-height: 1;
+				transition: color 0.15s;
+				flex-shrink: 0;
+			}
+			.otp-toggle.active {
+				color: #013f71;
+			}
+
+			/* ── Main ── */
+			.main-wrap {
+				padding: 10px 12px 0;
+			}
+
+			/* Status row */
+			.status-row {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				margin-bottom: 10px;
+			}
+			.status-time {
+				font-size: 11px;
+				color: #999;
+			}
+			.status-badge {
+				font-size: 11px;
+				font-weight: 600;
+				padding: 2px 9px;
+				border-radius: 10px;
+				cursor: default;
+			}
+			.status-badge.clickable {
+				cursor: pointer;
+				text-decoration: underline dotted;
+			}
+			.s-ok {
+				background: #e8f5e9;
+				color: #2e7d32;
+			}
+			.s-warn {
+				background: #fff8e1;
+				color: #e65100;
+			}
+			.s-err {
+				background: #ffebee;
+				color: #c62828;
+			}
+			.s-pin {
+				background: #e8f0f8;
+				color: #012d52;
+			}
+
+			/* Counter row */
+			.counter-row {
+				display: flex;
+				align-items: baseline;
+				justify-content: space-between;
+				margin-bottom: 6px;
+			}
+			.counter-num {
+				font-size: 34px;
+				font-weight: 700;
+				color: #013f71;
+				line-height: 1;
+			}
+			.counter-num.zero {
+				color: #d0d0d0;
+			}
+			.counter-sub {
+				font-size: 12px;
+				color: #aaa;
+				margin-left: 6px;
+			}
+			.btn-mark-all {
+				font-size: 11px;
+				color: #013f71;
+				background: none;
+				border: none;
+				cursor: pointer;
+				padding: 2px 0;
+				opacity: 0;
+				pointer-events: none;
+				transition: opacity 0.2s;
+			}
+			.btn-mark-all.visible {
+				opacity: 1;
+				pointer-events: auto;
+			}
+
+			/* Invoice list */
+			.invoice-list {
+				max-height: 320px;
+				overflow-y: auto;
+				border: 1px solid #e6edf4;
+				border-radius: 8px;
+				margin-bottom: 10px;
+			}
+			.invoice-list::-webkit-scrollbar {
+				width: 3px;
+			}
+			.invoice-list::-webkit-scrollbar-thumb {
+				background: #b0c8e0;
+				border-radius: 2px;
+			}
+
+			/* Section label inside list */
+			.list-section-label {
+				font-size: 10px;
+				font-weight: 700;
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+				color: #bbb;
+				padding: 5px 10px 4px;
+				background: #fafafa;
+				/* box-shadow zamiast border – nie znika przy hover sąsiedniego wiersza */
+				box-shadow:
+					0 -1px 0 #e6edf4,
+					0 1px 0 #e6edf4;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				cursor: pointer;
+				user-select: none;
+				position: relative;
+				z-index: 1;
+			}
+			.list-section-label:hover {
+				background: #f2f3f4;
+			}
+			.list-section-label.pending {
+				color: #013f71;
+				background: #edf2f7;
+				box-shadow:
+					0 -1px 0 #d0e4f0,
+					0 1px 0 #d0e4f0;
+			}
+			.list-section-label.pending:hover {
+				background: #dce8f0;
+			}
+			.section-chevron {
+				width: 14px;
+				height: 14px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				opacity: 0.7;
+				transition: transform 0.2s ease;
+				flex-shrink: 0;
+			}
+			.section-chevron svg {
+				display: block;
+			}
+			.list-section-label.collapsed .section-chevron {
+				transform: rotate(-90deg);
+			}
+
+			/* Animowane zwijanie sekcji */
+			/* grid trick: animacja bez hardcoded max-height */
+			.section-body {
+				display: grid;
+				grid-template-rows: 1fr;
+				opacity: 1;
+				transition:
+					grid-template-rows 0.22s ease,
+					opacity 0.18s ease;
+			}
+			.section-body > div {
+				overflow: hidden;
+				min-height: 0;
+			}
+			.section-body.collapsed {
+				grid-template-rows: 0fr;
+				opacity: 0;
+				pointer-events: none;
+			}
+
+			/* Invoice row */
+			.inv-item {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				padding: 7px 10px;
+				border-bottom: 1px solid #e4e4ec;
+				transition: background 0.1s;
+				position: relative;
+			}
+			.inv-item:last-child {
+				border-bottom: none;
+			}
+
+			/* Pending */
+			.inv-item:hover {
+				background: #f5f6f7;
+			}
+			.inv-item.pending .inv-seller {
+				color: #0d1a2e;
+				font-weight: 600;
+			}
+			/* Archive */
+			.inv-item.archive .inv-seller {
+				color: #aaa;
+			}
+			.inv-item.archive .inv-meta {
+				color: #ccc;
+			}
+			/* Fading on dismiss */
+			/* Invoice row – grid: [info 1fr] [actions 44px] × 2 rows */
+			.inv-item {
+				display: grid;
+				grid-template-columns: 1fr 44px;
+				grid-template-rows: auto auto;
+				row-gap: 5px;
+				padding: 8px 8px 8px 10px;
+				border-bottom: 1px solid #e4e4ec;
+			}
+			.inv-item:last-child {
+				border-bottom: none;
+			}
+			.inv-item:hover {
+				background: #f5f6f7;
+			}
+
+			/* Row 1 left: seller name */
+			.inv-seller {
+				font-size: 12px;
+				color: #555;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				align-self: center;
+				grid-column: 1;
+				grid-row: 1;
+			}
+			.inv-item.pending .inv-seller {
+				color: #0d1a2e;
+				font-weight: 600;
+			}
+			.inv-item.archive .inv-seller {
+				color: #aaa;
+			}
+
+			/* Row 1 right: portal – aligned to right edge of 44px column */
+			.inv-portal {
+				background: transparent;
+				border: 1px solid currentColor;
+				cursor: pointer;
+				width: 20px;
+				height: 20px;
+				border-radius: 4px;
+				font-size: 12px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				grid-column: 2;
+				grid-row: 1;
+				align-self: center;
+				justify-self: end;
+				transition:
+					background 0.12s,
+					color 0.12s,
+					border-color 0.12s;
+			}
+			.inv-item.pending .inv-portal {
+				color: #9fa8da;
+			}
+			.inv-item.archive .inv-portal {
+				color: #b0c8e0;
+			}
+			.inv-item .inv-portal:hover {
+				background: #e8f0f8;
+				border-color: #90b8d8;
+				color: #013f71;
+			}
+
+			/* Row 2 left: meta */
+			.inv-meta {
+				font-size: 11px;
+				color: #888;
+				display: grid;
+				grid-template-columns: 50px 1fr 70px;
+				gap: 4px;
+				align-items: center;
+				grid-column: 1;
+				grid-row: 2;
+				min-width: 0;
+			}
+			.inv-item.pending .inv-meta {
+				color: #555;
+			}
+			.inv-item.archive .inv-meta {
+				color: #ccc;
+			}
+			.inv-meta-date {
+				white-space: nowrap;
+			}
+			.inv-meta-number {
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+				min-width: 0;
+			}
+			.inv-meta-amount {
+				text-align: right;
+				white-space: nowrap;
+				font-variant-numeric: tabular-nums;
+			}
+
+			/* Row 2 right: action buttons – always visible, hover boosts */
+			.inv-actions {
+				display: flex;
+				align-items: center;
+				justify-content: flex-end;
+				width: 44px;
+				gap: 5px;
+				grid-column: 2;
+				grid-row: 2;
+				align-self: center;
+			}
+			.inv-act {
+				background: transparent;
+				border: 1px solid currentColor;
+				cursor: pointer;
+				width: 20px;
+				height: 20px;
+				border-radius: 4px;
+				font-size: 11px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				transition:
+					background 0.12s,
+					color 0.12s,
+					border-color 0.12s;
+				flex-shrink: 0;
+			}
+			.inv-item.pending .inv-act {
+				color: #9fa8da;
+			}
+			.inv-item.archive .inv-act {
+				color: #b0c8e0;
+			}
+
+			/* Specyficzność >= inv-item.pending/archive .inv-act */
+			.inv-item .inv-act-done:hover {
+				background: #e8f5e9;
+				border-color: #66bb6a;
+				color: #2e7d32;
+			}
+			.inv-item .inv-act-star:hover {
+				background: #fff8e1;
+				border-color: #ffb300;
+				color: #e65100;
+			}
+			.inv-item .inv-act-hide:hover {
+				background: #f5f5f5;
+				border-color: #bdbdbd;
+				color: #757575;
+			}
+
+			/* Fading on dismiss */
+			.inv-item.dismissing {
+				opacity: 0.3;
+				transition: opacity 0.25s;
+				pointer-events: none;
+			}
+
+			/* ── Empty state ── */
+			.empty-state {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				padding: 24px 16px 20px;
+				gap: 6px;
+			}
+			.empty-state-icon {
+				line-height: 1;
+			}
+			.empty-state-text {
+				font-size: 13px;
+				font-weight: 600;
+				color: #3c4a6e;
+				margin-top: 4px;
+			}
+			.empty-state-sub {
+				font-size: 11px;
+				color: #aab;
+				text-align: center;
+			}
+
+			/* ── Logs view ── */
+			.logs-wrap {
+				padding: 12px 14px 14px;
+				display: flex;
+				flex-direction: column;
+				height: 100%;
+			}
+			.logs-header {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				margin-bottom: 10px;
+			}
+			.logs-title {
+				font-size: 12px;
+				font-weight: 700;
+				color: #333;
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+			}
+			.logs-clear {
+				font-size: 11px;
+				color: #999;
+				background: none;
+				border: 1px solid #ddd;
+				border-radius: 5px;
+				padding: 3px 8px;
+				cursor: pointer;
+			}
+			.logs-clear:hover {
+				border-color: #c62828;
+				color: #c62828;
+			}
+			.logs-list {
+				flex: 1;
+				overflow-y: auto;
+				display: flex;
+				flex-direction: column;
+				gap: 6px;
+			}
+			.log-entry {
+				font-size: 11px;
+				background: #fafafa;
+				border: 1px solid #f0f0f0;
+				border-radius: 6px;
+				padding: 7px 9px;
+				line-height: 1.5;
+			}
+			.log-entry.error {
+				border-left: 3px solid #ef9a9a;
+			}
+			.log-time {
+				color: #bbb;
+				font-size: 10px;
+				margin-bottom: 2px;
+			}
+			.log-code {
+				color: #c62828;
+				font-weight: 600;
+			}
+			.log-msg {
+				color: #555;
+				word-break: break-word;
+			}
+			.logs-empty {
+				text-align: center;
+				color: #aaa;
+				font-size: 12px;
+				padding: 24px 0;
+			}
+
+			/* ── Toast ── */
+			.toast {
+				margin: 4px 0 2px;
+				background: #323232;
+				color: white;
+				border-radius: 8px;
+				padding: 0 12px;
+				font-size: 12px;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 8px;
+				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+				max-height: 0;
+				opacity: 0;
+				overflow: hidden;
+				transition:
+					max-height 0.2s ease,
+					opacity 0.18s,
+					padding 0.2s;
+				pointer-events: none;
+			}
+			.toast.visible {
+				max-height: 44px;
+				opacity: 1;
+				padding: 8px 12px;
+				pointer-events: auto;
+			}
+			.toast-msg {
+				flex: 1;
+			}
+			.toast-undo {
+				background: none;
+				border: none;
+				color: #80cbc4;
+				font-size: 12px;
+				font-weight: 600;
+				cursor: pointer;
+				padding: 6px 0 6px 12px;
+				white-space: nowrap;
+			}
+			.toast-undo:hover {
+				text-decoration: underline;
+			}
+
+			/* ── Buttons ── */
+			.btn {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				gap: 6px;
+				padding: 8px 14px;
+				border-radius: 8px;
+				border: none;
+				cursor: pointer;
+				font-size: 13px;
+				font-weight: 500;
+				transition:
+					opacity 0.15s,
+					background 0.15s;
+			}
+			.btn:disabled {
+				opacity: 0.5;
+				cursor: default;
+			}
+			.btn-primary {
+				background: #013f71;
+				color: white;
+				width: 100%;
+			}
+			.btn-primary:hover:not(:disabled) {
+				background: #012d52;
+			}
+			.btn-secondary {
+				background: #e6edf4;
+				color: #013f71;
+			}
+			.btn-secondary:hover:not(:disabled) {
+				background: #b0c8e0;
+			}
+
+			.btn-danger {
+				background: #ffebee;
+				color: #c62828;
+			}
+			.btn-danger:hover:not(:disabled) {
+				background: #ffcdd2;
+			}
+			.btn-icon {
+				padding: 8px 10px;
+			}
+
+			.btn-row {
+				display: flex;
+				gap: 8px;
+				padding: 0 0 12px;
+			}
+			.btn-row .btn-primary {
+				flex: 1;
+			}
+
+			.spinner {
+				width: 13px;
+				height: 13px;
+				border: 2px solid rgba(255, 255, 255, 0.4);
+				border-top-color: white;
+				border-radius: 50%;
+				animation: spin 0.6s linear infinite;
+			}
+			@keyframes spin {
+				to {
+					transform: rotate(360deg);
+				}
+			}
+
+			/* ── Settings ── */
+			.settings-wrap {
+				padding: 14px;
+			}
+			.section-title {
+				font-size: 10px;
+				font-weight: 700;
+				text-transform: uppercase;
+				letter-spacing: 0.6px;
+				color: #aaa;
+				margin-bottom: 8px;
+			}
+			.setting-row {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				margin-bottom: 10px;
+			}
+			.setting-label {
+				font-size: 13px;
+				color: #333;
+			}
+			.setting-sub {
+				font-size: 11px;
+				color: #999;
+				display: block;
+			}
+			.setting-select {
+				border: 1.5px solid #ddd;
+				border-radius: 6px;
+				padding: 5px 8px;
+				font-size: 12px;
+				background: white;
+			}
+			.toggle {
+				position: relative;
+				width: 36px;
+				height: 20px;
+				cursor: pointer;
+			}
+			.toggle input {
+				opacity: 0;
+				width: 0;
+				height: 0;
+			}
+			.toggle-slider {
+				position: absolute;
+				inset: 0;
+				background: #ccc;
+				border-radius: 20px;
+				transition: background 0.2s;
+			}
+			.toggle-slider::before {
+				content: "";
+				position: absolute;
+				width: 14px;
+				height: 14px;
+				left: 3px;
+				top: 3px;
+				background: white;
+				border-radius: 50%;
+				transition: transform 0.2s;
+			}
+			.toggle input:checked + .toggle-slider {
+				background: #013f71;
+			}
+			.toggle input:checked + .toggle-slider::before {
+				transform: translateX(16px);
+			}
+
+			.sep {
+				border: none;
+				border-top: 1px solid #eee;
+				margin: 10px 0;
+			}
+
+			/* ── Error ── */
+			.error-wrap {
+				padding: 16px;
+				text-align: center;
+			}
+
+			/* ── Footer ── */
+			.footer {
+				padding: 7px 14px;
+				border-top: 1px solid #eee;
+				display: flex;
+				justify-content: space-between;
+			}
+			.footer a {
+				font-size: 11px;
+				color: #013f71;
+				text-decoration: none;
+			}
+			.footer a:hover {
+				text-decoration: underline;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="header">
+			<div class="header-title">
+				<img src="icons/icon48.png" alt="" height="18" style="border-radius: 3px; vertical-align: middle" />
+				<span>KSeF Monitor</span>
+			</div>
+			<span class="header-env" id="envLabel">PRD</span>
+		</div>
+
+		<!-- VIEW: setup -->
+		<div class="view active" id="viewSetup">
+			<div class="setup-wrap">
+				<div class="setup-info">
+					Witaj! Aby zacząć, skonfiguruj token dostępowy KSeF.<br />
+					Kliknij poniżej, aby przejść przez proces konfiguracji.
+				</div>
+				<button class="btn btn-primary" id="btnOpenOnboarding">⚙ Skonfiguruj token KSeF</button>
+			</div>
+		</div>
+
+		<!-- VIEW: PIN -->
+		<div class="view" id="viewPin">
+			<div class="pin-wrap">
+				<div class="pin-title">🔑 Sesja wygasła</div>
+				<div class="pin-hint">Wprowadź PIN, aby ponownie odszyfrować token KSeF.</div>
+				<div class="otp-row">
+					<input
+						type="password"
+						class="otp-box"
+						id="pinBox0"
+						maxlength="1"
+						inputmode="numeric"
+						autocomplete="off"
+					/>
+					<input
+						type="password"
+						class="otp-box"
+						id="pinBox1"
+						maxlength="1"
+						inputmode="numeric"
+						autocomplete="off"
+					/>
+					<input
+						type="password"
+						class="otp-box"
+						id="pinBox2"
+						maxlength="1"
+						inputmode="numeric"
+						autocomplete="off"
+					/>
+					<input
+						type="password"
+						class="otp-box"
+						id="pinBox3"
+						maxlength="1"
+						inputmode="numeric"
+						autocomplete="off"
+					/>
+					<button type="button" class="otp-toggle" id="pinToggle" title="Pokaż/ukryj PIN">👁</button>
+				</div>
+				<div class="pin-error" id="pinError"></div>
+				<div class="btn-row">
+					<button class="btn btn-primary" id="btnPinConfirm">Zaloguj ponownie</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- VIEW: nowy token -->
+		<div class="view" id="viewNewToken">
+			<div class="pin-wrap">
+				<div class="pin-title">⚠️ Token unieważniony</div>
+				<div class="pin-hint">
+					Token KSeF wygasł lub został unieważniony w portalu. Wygeneruj nowy token i wklej go poniżej.<br /><br />Potwierdź
+					PIN, aby zaszyfrować nowy token.
+				</div>
+				<textarea
+					class="pin-input"
+					id="newTokenInput"
+					rows="3"
+					placeholder="Wklej nowy token KSeF..."
+					style="resize: none; font-size: 12px; line-height: 1.6; margin-bottom: 8px"
+				></textarea>
+				<div
+					id="newTokenNipConfirm"
+					style="
+						display: none;
+						font-size: 11px;
+						color: #013f71;
+						margin-bottom: 8px;
+						padding: 6px 10px;
+						background: #edf2f7;
+						border-radius: 6px;
+						border: 1px solid #d0e4f0;
+					"
+				></div>
+				<div class="otp-row" style="margin-bottom: 0">
+					<input
+						type="password"
+						class="otp-box"
+						id="newTokenPinBox0"
+						maxlength="1"
+						inputmode="numeric"
+						autocomplete="off"
+					/>
+					<input
+						type="password"
+						class="otp-box"
+						id="newTokenPinBox1"
+						maxlength="1"
+						inputmode="numeric"
+						autocomplete="off"
+					/>
+					<input
+						type="password"
+						class="otp-box"
+						id="newTokenPinBox2"
+						maxlength="1"
+						inputmode="numeric"
+						autocomplete="off"
+					/>
+					<input
+						type="password"
+						class="otp-box"
+						id="newTokenPinBox3"
+						maxlength="1"
+						inputmode="numeric"
+						autocomplete="off"
+					/>
+					<button type="button" class="otp-toggle" id="newTokenPinToggle" title="Pokaż/ukryj PIN">👁</button>
+				</div>
+				<input
+					type="hidden"
+					id="newTokenPin"
+					placeholder="PIN ••••••"
+					maxlength="8"
+					autocomplete="off"
+					inputmode="numeric"
+					style="margin-bottom: 0"
+				/>
+				<div class="pin-error" id="newTokenError"></div>
+				<div class="btn-row" style="margin-top: 12px">
+					<button class="btn btn-primary" id="btnNewTokenConfirm">Zapisz nowy token</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- VIEW: main -->
+		<div class="view" id="viewMain">
+			<div class="main-wrap">
+				<div class="status-row">
+					<span class="status-time" id="lastCheck">—</span>
+					<span class="status-badge s-ok" id="pollStatus">OK</span>
+				</div>
+
+				<div class="counter-row">
+					<div>
+						<span class="counter-num zero" id="invoiceCount">0</span>
+						<span class="counter-sub">nieprzejrzanych</span>
+					</div>
+					<button class="btn-mark-all" id="btnMarkAll">Oznacz wszystkie ✓</button>
+				</div>
+
+				<div class="invoice-list" id="invoiceList">
+					<div class="empty-state">
+						<div class="empty-state-icon">
+							<svg
+								width="36"
+								height="36"
+								viewBox="0 0 36 36"
+								fill="none"
+								xmlns="http://www.w3.org/2000/svg"
+							>
+								<circle cx="18" cy="18" r="17" stroke="#b0c8e0" stroke-width="1.5" />
+								<path
+									d="M11 18.5l5 5 9-9"
+									stroke="#013f71"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								/>
+							</svg>
+						</div>
+						<div class="empty-state-text">Wszystko przejrzane</div>
+						<div class="empty-state-sub">Powiadomimy Cię o nowych fakturach</div>
+					</div>
+				</div>
+
+				<!-- Toast – tuż pod listą, wstrzymuje się na hover -->
+				<div class="toast" id="toast">
+					<span class="toast-msg" id="toastMsg"></span>
+					<button class="toast-undo" id="toastUndo">Cofnij</button>
+				</div>
+			</div>
+
+			<div class="btn-row" style="padding: 8px 12px 12px">
+				<button class="btn btn-primary" id="btnCheckNow">🔄 Sprawdź teraz</button>
+				<button
+					class="btn btn-primary btn-icon"
+					id="btnSettings"
+					title="Ustawienia"
+					style="width: auto; flex: none; opacity: 0.75"
+				>
+					⚙️
+				</button>
+			</div>
+		</div>
+
+		<!-- VIEW: settings -->
+		<div class="view" id="viewSettings">
+			<div class="settings-wrap">
+				<div
+					id="settingsCompany"
+					style="
+						display: none;
+						font-size: 12px;
+						color: #013f71;
+						padding: 7px 10px;
+						background: #edf2f7;
+						border: 1px solid #b0c8e0;
+						border-radius: 7px;
+						margin-bottom: 12px;
+					"
+				></div>
+
+				<div class="section-title">Polling</div>
+				<div class="setting-row">
+					<span class="setting-label"
+						>Interwał sprawdzania
+						<span class="setting-sub">Minimum: 1 godzina (limit Chrome)</span>
+					</span>
+					<select class="setting-select" id="selectInterval">
+						<option value="60">Co 1 godzinę</option>
+						<option value="360">Co 6 godzin</option>
+						<option value="720">Co 12 godzin</option>
+						<option value="1440">Raz dziennie</option>
+					</select>
+				</div>
+				<div class="setting-row">
+					<span class="setting-label">Środowisko KSeF</span>
+					<select class="setting-select" id="selectEnv">
+						<option value="production">Produkcja</option>
+						<option value="demo">Demo (TR)</option>
+						<option value="test">Test (TE)</option>
+					</select>
+				</div>
+
+				<hr class="sep" />
+				<div class="section-title">Faktury</div>
+				<div class="setting-row">
+					<span class="setting-label"
+						>Nowe przez ostatnie
+						<span class="setting-sub">Faktury starsze trafiają do "Wcześniejszych"</span>
+					</span>
+					<select class="setting-select" id="selectPendingDays">
+						<option value="month">Bieżący miesiąc</option>
+						<option value="7">7 dni</option>
+						<option value="14">14 dni</option>
+						<option value="30">30 dni</option>
+					</select>
+				</div>
+
+				<hr class="sep" />
+				<div class="section-title">Powiadomienia push</div>
+				<div class="setting-row">
+					<div>
+						<span class="setting-label">Włącz powiadomienia</span>
+						<span class="setting-sub">Nowe faktury i wygaśnięcie sesji</span>
+					</div>
+					<label class="toggle">
+						<input type="checkbox" id="toggleNotifications" />
+						<span class="toggle-slider"></span>
+					</label>
+				</div>
+
+				<hr class="sep" />
+				<div class="section-title">Bezpieczeństwo</div>
+				<p style="font-size: 11px; color: #888; margin-bottom: 10px; line-height: 1.5">
+					Token przechowywany zaszyfrowany AES-256-GCM.<br />
+					Klucz szyfrowania pochodzi wyłącznie z Twojego PIN-u.
+				</p>
+
+				<div style="display: flex; gap: 8px; margin-bottom: 8px">
+					<button class="btn btn-primary" id="btnSaveSettings" style="flex: 1">💾 Zapisz</button>
+					<button class="btn btn-danger" id="btnRemoveToken">🗑️ Usuń token</button>
+				</div>
+				<button class="btn btn-secondary" id="btnReinitArchive" style="width: 100%; margin-bottom: 6px">
+					🔄 Odśwież archiwum faktur
+				</button>
+				<div
+					id="reinitError"
+					style="
+						display: none;
+						font-size: 11px;
+						color: #c62828;
+						margin-bottom: 6px;
+						padding: 6px 8px;
+						background: #ffebee;
+						border-radius: 6px;
+						line-height: 1.4;
+					"
+				></div>
+				<button class="btn btn-secondary" id="btnBackFromSettings" style="width: 100%">← Wróć</button>
+			</div>
+		</div>
+
+		<!-- VIEW: logs -->
+		<div class="view" id="viewLogs">
+			<div class="logs-wrap">
+				<div class="logs-header">
+					<span class="logs-title">Logi błędów</span>
+					<button class="logs-clear" id="btnClearLogs">Wyczyść</button>
+				</div>
+				<div id="logsList" class="logs-list"></div>
+				<div id="logsEmpty" class="logs-empty" style="display: none">
+					<div style="font-size: 24px; margin-bottom: 6px">🎉</div>
+					<div>Brak zapisanych błędów</div>
+				</div>
+				<button class="btn btn-secondary" id="btnLogsBack" style="margin-top: 10px; width: 100%">← Wróć</button>
+			</div>
+		</div>
+
+		<!-- VIEW: error -->
+		<div class="view" id="viewError">
+			<div class="error-wrap">
+				<div style="font-size: 28px; margin-bottom: 8px">⚠️</div>
+				<div style="font-weight: 600; margin-bottom: 4px" id="errorTitle">Błąd</div>
+				<div style="font-size: 12px; color: #666; margin-bottom: 14px" id="errorMessage"></div>
+				<button class="btn btn-secondary" id="btnErrorBack">← Wróć</button>
+			</div>
+		</div>
+
+		<div class="footer">
+			<a href="#" id="lnkLogs">Logi błędów</a>
+			<a href="#" id="lnkContact">Kontakt</a>
+			<a href="https://ksef.podatki.gov.pl" target="_blank">Portal KSeF ↗</a>
+		</div>
+
+		<script src="popup.js"></script>
+
+		<!-- Modal potwierdzenia usunięcia tokenu -->
+		<div
+			id="confirmModal"
+			style="
+				display: none;
+				position: fixed;
+				inset: 0;
+				background: rgba(0, 0, 0, 0.45);
+				z-index: 1000;
+				align-items: center;
+				justify-content: center;
+			"
+		>
+			<div
+				style="
+					background: white;
+					border-radius: 12px;
+					padding: 20px 18px 16px;
+					max-width: 260px;
+					margin: auto;
+					box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+				"
+			>
+				<div style="font-size: 13px; font-weight: 600; color: #1a1a2e; margin-bottom: 8px">
+					Usuń token i konfigurację?
+				</div>
+				<div style="font-size: 12px; color: #666; margin-bottom: 16px; line-height: 1.5">
+					Rozszerzenie przestanie działać. Będziesz musiał przejść onboarding od nowa.
+				</div>
+				<div style="display: flex; gap: 8px; justify-content: flex-end">
+					<button
+						id="confirmCancel"
+						style="
+							background: #f0f0f0;
+							border: none;
+							border-radius: 7px;
+							padding: 7px 14px;
+							font-size: 12px;
+							cursor: pointer;
+							color: #333;
+						"
+					>
+						Anuluj
+					</button>
+					<button
+						id="confirmOk"
+						style="
+							background: #c62828;
+							border: none;
+							border-radius: 7px;
+							padding: 7px 14px;
+							font-size: 12px;
+							cursor: pointer;
+							color: white;
+							font-weight: 600;
+						"
+					>
+						Usuń
+					</button>
+				</div>
+			</div>
+		</div>
+	</body>
+</html>

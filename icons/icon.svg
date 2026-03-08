@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!--
+    KSeF Watcher – źródło SVG
+    Kolory: #013f71 (granat), #dc0032 (czerwień), #FFFFFF (biel)
+    Font: Poppins Bold, fs=50
+    Układ: baseline row0=y60, baseline row1=y105
+    Kolumny: col0 center x=43, col1 center x=83
+  -->
+
+  <!-- Tło -->
+  <rect width="128" height="128" rx="20" ry="20" fill="#013f71"/>
+
+  <!-- Wiersz 1: K S – linia bazowa y=60 -->
+  <text x="43" y="60"
+        font-family="Poppins, 'Helvetica Neue', Arial, sans-serif"
+        font-weight="700" font-size="50"
+        text-anchor="middle"
+        fill="#FFFFFF">K</text>
+
+  <text x="83" y="60"
+        font-family="Poppins, 'Helvetica Neue', Arial, sans-serif"
+        font-weight="700" font-size="50"
+        text-anchor="middle"
+        fill="#FFFFFF">S</text>
+
+  <!-- Wiersz 2: e F – linia bazowa y=105 -->
+  <text x="43" y="105"
+        font-family="Poppins, 'Helvetica Neue', Arial, sans-serif"
+        font-weight="700" font-size="50"
+        text-anchor="middle"
+        fill="#dc0032">e</text>
+
+  <text x="83" y="105"
+        font-family="Poppins, 'Helvetica Neue', Arial, sans-serif"
+        font-weight="700" font-size="50"
+        text-anchor="middle"
+        fill="#FFFFFF">F</text>
+</svg>

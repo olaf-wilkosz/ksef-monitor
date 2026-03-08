@@ -1,0 +1,830 @@
+<!doctype html>
+<html lang="pl">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>KSeF Monitor – Konfiguracja</title>
+		<style>
+			*,
+			*::before,
+			*::after {
+				box-sizing: border-box;
+				margin: 0;
+				padding: 0;
+			}
+
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+				background: #eef2f7;
+				min-height: 100vh;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				padding: 24px 16px;
+			}
+
+			.card {
+				background: white;
+				border-radius: 16px;
+				width: 100%;
+				max-width: 520px;
+				box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+				overflow: hidden;
+			}
+
+			/* Progress */
+			.progress-bar {
+				height: 3px;
+				background: rgba(255, 255, 255, 0.2);
+			}
+			.progress-fill {
+				height: 100%;
+				background: linear-gradient(90deg, #013f71, #0a6abf);
+				transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+			}
+
+			/* Header */
+			.card-header {
+				padding: 18px 28px 16px;
+				background: linear-gradient(135deg, #dc0032, #a0001f);
+				border-bottom: none;
+			}
+			.step-indicator {
+				font-size: 11px;
+				font-weight: 600;
+				color: rgba(255, 255, 255, 0.6);
+				letter-spacing: 0.5px;
+				text-transform: uppercase;
+				margin-bottom: 4px;
+			}
+			.card-title {
+				font-size: 18px;
+				font-weight: 700;
+				color: #fff;
+			}
+			.card-subtitle {
+				font-size: 13px;
+				color: rgba(255, 255, 255, 0.8);
+				margin-top: 2px;
+			}
+
+			/* Body */
+			.card-body {
+				padding: 20px 28px;
+			}
+
+			/* Footer */
+			.card-footer {
+				padding: 14px 28px;
+				border-top: 1px solid #f0f0f0;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				gap: 8px;
+			}
+
+			/* Buttons */
+			.btn {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				gap: 7px;
+				padding: 10px 20px;
+				border-radius: 9px;
+				border: none;
+				cursor: pointer;
+				font-size: 14px;
+				font-weight: 600;
+				transition: all 0.15s;
+			}
+			.btn:disabled {
+				opacity: 0.45;
+				cursor: default;
+			}
+			.btn-primary {
+				background: #013f71;
+				color: white;
+			}
+			.btn-primary:hover:not(:disabled) {
+				background: #012d52;
+			}
+			.btn-secondary {
+				background: #edf2f7;
+				color: #013f71;
+			}
+			.btn-secondary:hover:not(:disabled) {
+				background: #d6e2ed;
+			}
+			.btn-ghost {
+				background: none;
+				color: #aaa;
+				font-size: 13px;
+				padding: 8px 12px;
+			}
+			.btn-ghost:hover {
+				color: #555;
+			}
+			.btn-sm {
+				padding: 7px 14px;
+				font-size: 13px;
+			}
+
+			/* Form */
+			.form-group {
+				margin-bottom: 14px;
+			}
+			.form-group:last-child {
+				margin-bottom: 0;
+			}
+			.form-label {
+				display: block;
+				font-size: 12px;
+				font-weight: 600;
+				color: #444;
+				margin-bottom: 5px;
+			}
+			.form-hint {
+				font-size: 11px;
+				color: #888;
+				margin-bottom: 5px;
+				line-height: 1.4;
+			}
+			.form-input {
+				width: 100%;
+				border: 1.5px solid #dde0ea;
+				border-radius: 8px;
+				padding: 9px 13px;
+				font-size: 13px;
+				outline: none;
+				transition:
+					border-color 0.15s,
+					box-shadow 0.15s;
+				font-family: inherit;
+				background: #fafbff;
+			}
+			.form-input:focus {
+				border-color: #013f71;
+				box-shadow: 0 0 0 3px rgba(1, 63, 113, 0.08);
+				background: white;
+			}
+			.form-input.error {
+				border-color: #e53935;
+			}
+			.form-error {
+				color: #e53935;
+				font-size: 11px;
+				margin-top: 4px;
+			}
+			textarea.form-input {
+				resize: none;
+				font-size: 12px;
+				line-height: 1.5;
+			}
+			select.form-input {
+				cursor: pointer;
+			}
+
+			/* PIN inputs */
+			.otp-box {
+				width: 46px;
+				height: 52px;
+				text-align: center;
+				font-size: 20px;
+				letter-spacing: 0;
+				padding: 0;
+				flex-shrink: 0;
+			}
+			.otp-box.filled {
+				border-color: #013f71;
+				background: #e8f0f8;
+			}
+
+			/* Environment radios */
+			.radio-group {
+				display: flex;
+				gap: 8px;
+			}
+			.radio-option {
+				flex: 1;
+				border: 1.5px solid #dde0ea;
+				border-radius: 8px;
+				padding: 9px 8px;
+				cursor: pointer;
+				transition:
+					border-color 0.15s,
+					background 0.15s;
+				text-align: center;
+				background: #fafbff;
+			}
+			.radio-option.selected {
+				border-color: #013f71;
+				background: #e8f0f8;
+			}
+			.radio-option input {
+				display: none;
+			}
+			.radio-label {
+				font-weight: 600;
+				font-size: 12px;
+				display: block;
+			}
+			.radio-desc {
+				font-size: 10px;
+				color: #888;
+				margin-top: 1px;
+			}
+
+			/* Collapsible */
+			.collapsible {
+				margin-bottom: 14px;
+			}
+			.collapsible-trigger {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				font-size: 12px;
+				color: #013f71;
+				cursor: pointer;
+				padding: 6px 0;
+				user-select: none;
+				background: none;
+				border: none;
+				font-family: inherit;
+				font-weight: 600;
+			}
+			.collapsible-trigger:hover {
+				color: #012d52;
+			}
+			.collapsible-arrow {
+				transition: transform 0.2s;
+				font-size: 10px;
+			}
+			.collapsible-arrow.open {
+				transform: rotate(90deg);
+			}
+			.collapsible-body {
+				overflow: hidden;
+				max-height: 0;
+				transition:
+					max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+					opacity 0.2s;
+				opacity: 0;
+			}
+			.collapsible-body.open {
+				max-height: 400px;
+				opacity: 1;
+			}
+			.collapsible-inner {
+				background: #f7f9ff;
+				border: 1px solid #e0e6f5;
+				border-radius: 8px;
+				padding: 12px 14px;
+				font-size: 12px;
+				line-height: 1.7;
+				color: #444;
+				margin-bottom: 2px;
+			}
+			.collapsible-inner ol {
+				padding-left: 16px;
+			}
+			.collapsible-inner li {
+				margin-bottom: 6px;
+			}
+			.collapsible-inner a {
+				color: #013f71;
+			}
+			.collapsible-inner b {
+				color: #1a1a2e;
+			}
+
+			/* Status badges */
+			.badge {
+				display: inline-flex;
+				align-items: center;
+				gap: 5px;
+				font-size: 11px;
+				padding: 4px 9px;
+				border-radius: 20px;
+				font-weight: 600;
+				margin-top: 6px;
+			}
+			.badge-blue {
+				background: #e8f0f8;
+				color: #013f71;
+				border: 1px solid #b0c8e0;
+			}
+			.badge-green {
+				background: #edf7ee;
+				color: #2e7d32;
+				border: 1px solid #b2dfb4;
+			}
+
+			/* Status panel (test/fetch result) */
+			.status-panel {
+				border-radius: 9px;
+				padding: 13px 15px;
+				font-size: 13px;
+				font-weight: 600;
+				display: flex;
+				align-items: flex-start;
+				gap: 10px;
+				transition: all 0.2s;
+			}
+			.status-panel.loading {
+				background: #e8f0f8;
+				color: #013f71;
+				border: 1px solid #b0c8e0;
+			}
+			.status-panel.success {
+				background: #edf7ee;
+				color: #2e7d32;
+				border: 1px solid #b2dfb4;
+			}
+			.status-panel.error {
+				background: #fef0f0;
+				color: #c62828;
+				border: 1px solid #f5c6c6;
+			}
+			.status-icon {
+				font-size: 16px;
+				flex-shrink: 0;
+				margin-top: 1px;
+			}
+			.status-body {
+				flex: 1;
+			}
+			.status-title {
+				font-weight: 700;
+			}
+			.status-detail {
+				font-size: 11px;
+				font-weight: 400;
+				margin-top: 3px;
+				line-height: 1.5;
+				opacity: 0.85;
+			}
+
+			/* Checklist */
+			.checklist {
+				margin-top: 10px;
+			}
+			.check-item {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				font-size: 12px;
+				color: #555;
+				padding: 5px 0;
+				border-bottom: 1px solid #f5f5f5;
+			}
+			.check-item:last-child {
+				border-bottom: none;
+			}
+			.check-icon {
+				width: 16px;
+				text-align: center;
+				flex-shrink: 0;
+			}
+
+			/* PIN section (hidden until test passes) */
+			.pin-section {
+				max-height: 0;
+				overflow: hidden;
+				opacity: 0;
+				transition:
+					max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+					opacity 0.3s;
+			}
+			.pin-section.visible {
+				max-height: 300px;
+				opacity: 1;
+			}
+			.pin-divider {
+				border: none;
+				border-top: 1px solid #eee;
+				margin: 16px 0;
+			}
+
+			/* Hints */
+			.hints-box {
+				background: #fffbf0;
+				border: 1px solid #ffe0a0;
+				border-radius: 8px;
+				padding: 10px 13px;
+				margin-top: 10px;
+				font-size: 11px;
+				color: #7a5a00;
+				line-height: 1.7;
+			}
+			.hints-box ul {
+				padding-left: 14px;
+				margin-top: 4px;
+			}
+
+			/* Final screen */
+			.final-wrap {
+				padding: 24px 28px;
+				text-align: center;
+			}
+			.final-icon {
+				font-size: 52px;
+				margin-bottom: 12px;
+			}
+			.final-title {
+				font-size: 20px;
+				font-weight: 700;
+				color: #013f71;
+				margin-bottom: 6px;
+			}
+			.final-sub {
+				font-size: 13px;
+				color: #666;
+				line-height: 1.6;
+				margin-bottom: 18px;
+			}
+			.final-checks {
+				text-align: left;
+				background: #f7f9ff;
+				border-radius: 9px;
+				padding: 12px 16px;
+				font-size: 12px;
+				color: #444;
+				line-height: 2;
+			}
+
+			/* Spinner */
+			.spinner {
+				width: 15px;
+				height: 15px;
+				flex-shrink: 0;
+				border: 2px solid rgba(1, 63, 113, 0.2);
+				border-top-color: #013f71;
+				border-radius: 50%;
+				animation: spin 0.65s linear infinite;
+			}
+			.spinner-white {
+				border-color: rgba(255, 255, 255, 0.3);
+				border-top-color: white;
+			}
+
+			@keyframes spin {
+				to {
+					transform: rotate(360deg);
+				}
+			}
+
+			/* Steps */
+			.step-page {
+				display: none;
+			}
+			.step-page.active {
+				display: block;
+			}
+
+			/* Slide-in animation for new content */
+			@keyframes slideDown {
+				from {
+					opacity: 0;
+					transform: translateY(-8px);
+				}
+				to {
+					opacity: 1;
+					transform: translateY(0);
+				}
+			}
+			.slide-in {
+				animation: slideDown 0.25s ease;
+			}
+
+			/* Warn block */
+			.warn-inline {
+				font-size: 11px;
+				color: #7a5a00;
+				background: #fffbf0;
+				border: 1px solid #ffe0a0;
+				border-radius: 7px;
+				padding: 7px 11px;
+				margin-top: 8px;
+				line-height: 1.5;
+			}
+			.warn-inline b,
+			.warn-inline strong,
+			.collapsible-inner b,
+			.collapsible-inner strong {
+				color: inherit;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="card">
+			<div class="progress-bar"><div class="progress-fill" id="progress" style="width: 0%"></div></div>
+
+			<!-- ═══ KROK 1: Token + NIP + Środowisko ════════════════════════════════ -->
+			<div class="step-page active" id="step1">
+				<div class="card-header">
+					<div class="step-indicator">Krok 1 z 3</div>
+					<div class="card-title">🔑 Token KSeF</div>
+					<div class="card-subtitle">Wklej token z portalu, resztę wykryjemy automatycznie</div>
+				</div>
+				<div class="card-body">
+					<!-- Token -->
+					<div class="form-group">
+						<label class="form-label">Token KSeF</label>
+						<textarea
+							class="form-input"
+							id="inputToken"
+							rows="2"
+							placeholder="Wklej token KSeF..."
+						></textarea>
+						<div class="form-error" id="tokenError"></div>
+					</div>
+
+					<!-- NIP + company badge w jednym rzędzie – bez CLS -->
+					<div class="form-group" id="nipGroup">
+						<label class="form-label">NIP</label>
+						<div class="form-hint" id="nipHint"></div>
+						<div style="display: flex; gap: 8px">
+							<input
+								type="text"
+								class="form-input"
+								id="inputNip"
+								placeholder="—"
+								readonly
+								style="
+									width: calc((100% - 16px) / 3);
+									flex-shrink: 0;
+									background: transparent;
+									color: #aaa;
+									cursor: default;
+									border-color: transparent;
+									transition:
+										border-color 0.3s,
+										background 0.3s,
+										color 0.3s;
+								"
+							/>
+							<div
+								id="companyBadge"
+								style="
+									flex: 1;
+									font-size: 12px;
+									color: #888;
+									border: 1.5px solid transparent;
+									border-radius: 8px;
+									padding: 9px 13px;
+									overflow: hidden;
+									text-overflow: ellipsis;
+									white-space: nowrap;
+									background: transparent;
+									transition:
+										background 0.2s,
+										border-color 0.2s,
+										color 0.2s;
+									display: flex;
+									align-items: center;
+								"
+							></div>
+						</div>
+						<div class="form-error" id="nipError"></div>
+					</div>
+
+					<!-- Środowisko -->
+					<div class="form-group">
+						<label class="form-label">Środowisko KSeF</label>
+						<div class="radio-group">
+							<label class="radio-option selected" id="optProd">
+								<input type="radio" name="env" value="production" checked />
+								<span class="radio-label">🏭 Produkcja</span>
+								<span class="radio-desc">ksef.podatki.gov.pl</span>
+							</label>
+							<label class="radio-option" id="optDemo">
+								<input type="radio" name="env" value="demo" />
+								<span class="radio-label">🧪 Demo (TR)</span>
+								<span class="radio-desc">Przedprodukcja</span>
+							</label>
+							<label class="radio-option" id="optTest">
+								<input type="radio" name="env" value="test" />
+								<span class="radio-label">⚗️ Test (TE)</span>
+								<span class="radio-desc">web2te-ksef.mf.gov.pl</span>
+							</label>
+						</div>
+					</div>
+
+					<!-- Collapsible: Jak wygenerować token -->
+					<div class="collapsible" id="howToCollapsible">
+						<button class="collapsible-trigger" id="btnHowTo" type="button">
+							<span class="collapsible-arrow" id="arrowHowTo">▶</span>
+							Jak wygenerować token KSeF?
+						</button>
+						<div class="collapsible-body" id="bodyHowTo">
+							<div class="collapsible-inner">
+								Token to 40-znakowy kod dostępu do API. Wyświetlany <b>tylko raz</b> – skopiuj go od
+								razu. <br /><br />
+								<ol>
+									<li>
+										Zaloguj się do
+										<a href="https://ksef.podatki.gov.pl" target="_blank">ksef.podatki.gov.pl</a>
+										(Profil Zaufany / e-Dowód / cert. kwalifikowany)
+									</li>
+									<li>Menu → <b>Tokeny</b> → <b>Generuj token</b></li>
+									<li>Nazwa tokenu: np. <em>„KSeF Monitor"</em></li>
+									<li>Uprawnienia: zaznacz <b>wyłącznie „przeglądanie faktur"</b></li>
+									<li>Kliknij <b>Generuj</b> → natychmiast kliknij <b>Kopiuj</b></li>
+								</ol>
+								<div style="margin-top: 8px; color: #c62828">
+									⚠️ Dla spółek wymagany druk <b>ZAW-FA</b> złożony wcześniej w US.<br />
+									Tokeny ważne do <b>31.12.2026</b>.
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<!-- Collapsible: Opcje zaawansowane -->
+					<div class="collapsible">
+						<button class="collapsible-trigger" id="btnAdvanced" type="button">
+							<span class="collapsible-arrow" id="arrowAdvanced">▶</span>
+							Opcje zaawansowane
+						</button>
+						<div class="collapsible-body" id="bodyAdvanced">
+							<div class="collapsible-inner">
+								<label class="form-label" style="margin-bottom: 5px">Interwał sprawdzania</label>
+								<select class="form-input" id="inputInterval">
+									<option value="60" selected>Co 1 godzinę (zalecane)</option>
+									<option value="360">Co 6 godzin</option>
+									<option value="720">Co 12 godzin</option>
+									<option value="1440">Raz dziennie</option>
+								</select>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="card-footer">
+					<span></span>
+					<button class="btn btn-primary" id="btn1Next" disabled>Dalej →</button>
+				</div>
+			</div>
+
+			<!-- ═══ KROK 2: Test tokenu + PIN (scalony) ══════════════════════════════ -->
+			<div class="step-page" id="step2">
+				<div class="card-header">
+					<div class="step-indicator" id="step2indicator">Krok 2 z 3</div>
+					<div class="card-title" id="step2title">🔌 Weryfikacja tokenu</div>
+					<div class="card-subtitle" id="step2subtitle">Sprawdzam połączenie z KSeF...</div>
+				</div>
+				<div class="card-body">
+					<!-- Status panel testu -->
+					<div id="testPanel" class="status-panel loading">
+						<div class="status-icon"><div class="spinner"></div></div>
+						<div class="status-body">
+							<div class="status-title" id="testTitle">Łączę z KSeF API...</div>
+							<div class="status-detail" id="testDetail"></div>
+						</div>
+					</div>
+
+					<!-- Checklist kroków testu -->
+					<div class="checklist" id="testChecklist">
+						<div class="check-item">
+							<span class="check-icon" id="iconKey">⏳</span>
+							<span>Pobieranie klucza publicznego MF</span>
+						</div>
+						<div class="check-item">
+							<span class="check-icon" id="iconAuth">⏳</span>
+							<span>Autoryzacja tokenem (RSA-OAEP → JWT)</span>
+						</div>
+					</div>
+
+					<!-- Wskazówki diagnostyczne (pokazywane przy błędzie) -->
+					<div class="hints-box" id="hintsBox" style="display: none">
+						<strong>💡 Możliwe przyczyny:</strong>
+						<ul id="hintsList"></ul>
+					</div>
+
+					<!-- Sekcja PIN – pojawia się po sukcesie testu -->
+					<div class="pin-section" id="pinSection">
+						<hr class="pin-divider" />
+						<div class="slide-in">
+							<div style="font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 10px">
+								🔒 Ustaw PIN
+							</div>
+							<div style="font-size: 11px; color: #777; margin-bottom: 14px; line-height: 1.5">
+								Token zostanie zaszyfrowany AES-256-GCM kluczem z PIN-u. Wpisywany co ~24h przy
+								odnawianiu sesji.
+							</div>
+							<div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px">
+								<div style="display: flex; gap: 8px">
+									<input
+										type="password"
+										class="form-input otp-box"
+										id="pinBox0"
+										maxlength="1"
+										inputmode="numeric"
+										autocomplete="new-password"
+									/>
+									<input
+										type="password"
+										class="form-input otp-box"
+										id="pinBox1"
+										maxlength="1"
+										inputmode="numeric"
+										autocomplete="new-password"
+									/>
+									<input
+										type="password"
+										class="form-input otp-box"
+										id="pinBox2"
+										maxlength="1"
+										inputmode="numeric"
+										autocomplete="new-password"
+									/>
+									<input
+										type="password"
+										class="form-input otp-box"
+										id="pinBox3"
+										maxlength="1"
+										inputmode="numeric"
+										autocomplete="new-password"
+									/>
+								</div>
+								<button
+									type="button"
+									id="pinToggle"
+									title="Pokaż/ukryj PIN"
+									style="
+										background: none;
+										border: none;
+										cursor: pointer;
+										font-size: 18px;
+										color: #aaa;
+										padding: 4px;
+										line-height: 1;
+										flex-shrink: 0;
+									"
+								>
+									👁
+								</button>
+							</div>
+							<div class="form-error" id="pinError"></div>
+							<div class="warn-inline">
+								⚠️ Zapamiętaj PIN – bez niego trzeba wygenerować nowy token w portalu KSeF.
+							</div>
+						</div>
+					</div>
+				</div>
+				<div class="card-footer">
+					<button class="btn btn-ghost" id="btn2Back">← Wstecz</button>
+					<div style="display: flex; gap: 8px; align-items: center">
+						<button class="btn btn-secondary btn-sm" id="btnRetryTest" style="display: none">
+							🔄 Spróbuj ponownie
+						</button>
+						<button class="btn btn-primary" id="btnConfirmPin" style="display: none">
+							Szyfruj i dalej →
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<!-- ═══ KROK 3: Pobieranie + podsumowanie (połączone) ══════════════════ -->
+			<div class="step-page" id="step3">
+				<div class="card-header" id="step3header">
+					<div class="step-indicator">Krok 3 z 3</div>
+					<div class="card-title" id="step3title">📥 Inicjalizacja archiwum</div>
+					<div class="card-subtitle" id="step3subtitle">Pobieranie faktur z bieżącego miesiąca...</div>
+				</div>
+				<div class="card-body">
+					<!-- Status pobierania -->
+					<div id="fetchPanel" class="status-panel loading">
+						<div class="status-icon"><div class="spinner"></div></div>
+						<div class="status-body">
+							<div class="status-title" id="fetchTitle">Pobieram faktury...</div>
+							<div class="status-detail" id="fetchDetail"></div>
+						</div>
+					</div>
+
+					<!-- Podsumowanie końcowe – pojawia się po zakończeniu pobierania -->
+					<div id="finalSummary" style="display: none">
+						<div class="final-checks" style="margin-top: 12px">
+							✅ Token zaszyfrowany AES-256-GCM<br />
+							✅ Połączenie z KSeF zweryfikowane<br />
+							✅ Alarm co <span id="finalInterval">60</span> min aktywny<br />
+							<span id="finalArchiveLine">✅ Archiwum zainicjalizowane</span>
+						</div>
+						<div class="final-sub" style="margin-top: 12px">
+							Rozszerzenie będzie sprawdzać nowe faktury co <span id="finalInterval2">60</span> min i
+							powiadamiać przez badge na ikonie.
+						</div>
+					</div>
+				</div>
+				<div class="card-footer" style="justify-content: flex-end">
+					<button class="btn btn-primary" id="btnClose" style="display: none">Zamknij ✕</button>
+				</div>
+				<div
+					id="toolbarHint"
+					style="display: none; font-size: 11px; color: #888; text-align: center; padding: 0 28px 14px"
+				>
+					Kliknij ikonę rozszerzenia w pasku przeglądarki →
+				</div>
+			</div>
+		</div>
+		<script type="module" src="onboarding.js"></script>
+	</body>
+</html>

@@ -1,0 +1,16 @@
+# System
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Paczki do Store
+*.zip
+*.crx
+
+# Edytory
+.vscode/
+.idea/
+*.swp
+
+# Node (jeśli kiedyś pojawi się build step)
+node_modules/
