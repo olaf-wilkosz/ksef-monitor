@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pl">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>KSeF Monitor – Polityka prywatności</title>
+		<style>
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+				max-width: 740px;
+				margin: 48px auto;
+				padding: 0 24px;
+				color: #222;
+				line-height: 1.7;
+				font-size: 15px;
+			}
+			h1 {
+				color: #013f71;
+				font-size: 24px;
+				margin-bottom: 4px;
+			}
+			h2 {
+				color: #013f71;
+				font-size: 17px;
+				margin-top: 36px;
+			}
+			.meta {
+				color: #888;
+				font-size: 13px;
+				margin-bottom: 36px;
+			}
+			a {
+				color: #013f71;
+			}
+			ul {
+				padding-left: 20px;
+			}
+			li {
+				margin-bottom: 4px;
+			}
+		</style>
+	</head>
+	<body>
+		<h1>Polityka prywatności – KSeF Monitor</h1>
+		<p class="meta">Ostatnia aktualizacja: marzec 2026</p>
+
+		<p>
+			KSeF Monitor to rozszerzenie Chrome do monitorowania faktur zakupowych w Krajowym Systemie e-Faktur.
+			Niniejsza polityka opisuje, jakie dane są przetwarzane i w jaki sposób.
+		</p>
+
+		<h2>1. Jakie dane są przechowywane</h2>
+		<p>
+			Wszystkie dane przechowywane są wyłącznie lokalnie w pamięci przeglądarki użytkownika
+			(<code>chrome.storage.local</code>). Nie są wysyłane do żadnych zewnętrznych serwerów poza KSeF API
+			Ministerstwa Finansów.
+		</p>
+		<ul>
+			<li>
+				<strong>Token KSeF</strong> – zaszyfrowany algorytmem AES-256-GCM. Klucz szyfrowania pochodzi z PIN-u
+				ustawionego przez użytkownika i nie jest nigdzie przechowywany.
+			</li>
+			<li>
+				<strong>Metadane faktur</strong> – numer faktury, data, nazwa i NIP wystawcy, kwota brutto, waluta.
+				Pobierane z KSeF API i przechowywane lokalnie jako lista do wyświetlenia.
+			</li>
+			<li>
+				<strong>Konfiguracja</strong> – NIP firmy, wybrane środowisko KSeF, interwał sprawdzania, preferencje
+				powiadomień.
+			</li>
+			<li>
+				<strong>Log błędów</strong> – ostatnie 50 komunikatów błędów technicznych (kody i opisy). Służy
+				wyłącznie do diagnostyki przez użytkownika.
+			</li>
+		</ul>
+
+		<h2>2. Z jakimi serwerami komunikuje się rozszerzenie</h2>
+		<p>Rozszerzenie komunikuje się wyłącznie z oficjalnym KSeF API Ministerstwa Finansów:</p>
+		<ul>
+			<li><code>https://api.ksef.mf.gov.pl</code> – środowisko produkcyjne</li>
+			<li><code>https://api-demo.ksef.mf.gov.pl</code> – środowisko Demo (TR)</li>
+			<li><code>https://api-test.ksef.mf.gov.pl</code> – środowisko Test (TE)</li>
+		</ul>
+		<p>
+			Żadne dane użytkownika nie są wysyłane do zewnętrznych serwerów, serwerów analitycznych ani serwerów twórcy
+			rozszerzenia.
+		</p>
+
+		<h2>3. Czego rozszerzenie nie robi</h2>
+		<ul>
+			<li>Nie zbiera danych analitycznych ani telemetrycznych.</li>
+			<li>Nie śledzi aktywności użytkownika w przeglądarce.</li>
+			<li>
+				Nie przesyła żadnych danych poza urządzenie użytkownika (z wyjątkiem zapytań do KSeF API wymaganych do
+				działania).
+			</li>
+			<li>Nie wyświetla reklam.</li>
+			<li>Nie udostępnia danych podmiotom trzecim.</li>
+		</ul>
+
+		<h2>4. Uprawnienia rozszerzenia</h2>
+		<ul>
+			<li><strong>storage</strong> – zapis konfiguracji i danych faktur lokalnie w przeglądarce.</li>
+			<li><strong>alarms</strong> – cykliczne uruchamianie sprawdzania faktur w tle.</li>
+			<li><strong>notifications</strong> – opcjonalne powiadomienia systemowe o nowych fakturach.</li>
+			<li>
+				<strong>host_permissions</strong> (<code>api.ksef.mf.gov.pl</code> i odpowiedniki) – komunikacja z KSeF
+				API.
+			</li>
+		</ul>
+
+		<h2>5. Usuwanie danych</h2>
+		<p>
+			Wszystkie dane można usunąć w dowolnym momencie przez opcję <strong>Usuń token</strong> w ustawieniach
+			rozszerzenia. Powoduje to usunięcie zaszyfrowanego tokenu, listy faktur i całej konfiguracji z pamięci
+			przeglądarki. Odinstalowanie rozszerzenia również usuwa wszystkie dane.
+		</p>
+
+		<h2>6. Kontakt</h2>
+		<p>Pytania dotyczące prywatności: <a href="mailto:ksef-monitor@pm.me">ksef-monitor@pm.me</a></p>
+		<p>
+			Kod źródłowy:
+			<a href="https://github.com/olaf-wilkosz/ksef-monitor" target="_blank"
+				>github.com/olaf-wilkosz/ksef-monitor</a
+			>
+		</p>
+
+		<hr style="margin-top: 48px; border: none; border-top: 1px solid #eee" />
+		<p style="color: #aaa; font-size: 12px">
+			KSeF Monitor nie jest produktem ani usługą Ministerstwa Finansów ani Krajowej Administracji Skarbowej.
+		</p>
+	</body>
+</html>
