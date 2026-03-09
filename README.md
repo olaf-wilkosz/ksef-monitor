@@ -4,6 +4,8 @@
 
 Rozszerzenie Chrome, które monitoruje nowe faktury zakupowe w Krajowym Systemie e-Faktur i powiadamia Cię gdy pojawi się coś nowego – bez logowania do portalu.
 
+<img src="store/screenshots/screenshot-5.png" width="900" alt="Działa z Krajowym Systemem e-Faktur">
+
 ---
 
 ## Co robi
@@ -20,7 +22,6 @@ Rozszerzenie Chrome, które monitoruje nowe faktury zakupowe w Krajowym Systemie
 
 - Przeglądarka Chrome, Edge lub Brave (wersja 88+)
 - Token KSeF z uprawnieniem **„przeglądanie faktur"** – wygenerujesz go w [portalu KSeF](https://ksef.podatki.gov.pl) w zakładce *Zarządzaj tokenami*
-- NIP firmy, do której należy token
 
 ---
 
@@ -35,7 +36,7 @@ Kliknij **Dodaj do Chrome** na [stronie rozszerzenia](https://chrome.google.com/
 1. Pobierz i rozpakuj archiwum ZIP z rozszerzeniem
 2. Otwórz `chrome://extensions` w przeglądarce
 3. Włącz **Tryb dewelopera** (przełącznik w prawym górnym rogu)
-4. Kliknij **Załaduj rozpakowane** i wskaż folder z plikami
+4. Kliknij **Załaduj rozpakowane** i wskaż folder `extension/`
 5. Ikona KSeF Monitor pojawi się w pasku – kliknij ją i przejdź przez konfigurację
 
 ---
@@ -44,23 +45,27 @@ Kliknij **Dodaj do Chrome** na [stronie rozszerzenia](https://chrome.google.com/
 
 Po kliknięciu ikony pojawi się kreator w 3 krokach:
 
-**Krok 1 – Środowisko i NIP**
-Wybierz środowisko KSeF (zazwyczaj *Produkcja*) i wpisz NIP firmy.
+**Krok 1 – Token i środowisko**
+Wklej token KSeF skopiowany z portalu. NIP i nazwa firmy zostaną odczytane automatycznie.
 
-**Krok 2 – Token i PIN**
-Wklej token KSeF skopiowany z portalu. Ustaw PIN – to hasło, którym rozszerzenie szyfruje token lokalnie. Zapamiętaj go, bo będzie potrzebny przy ponownym logowaniu.
+**Krok 2 – PIN**
+Ustaw PIN – to hasło, którym rozszerzenie szyfruje token lokalnie. Zapamiętaj go, bo będzie potrzebny przy ponownym logowaniu.
 
 **Krok 3 – Test połączenia**
-Rozszerzenie sprawdza czy token działa i pobiera listę ostatnich faktur jako punkt wyjścia. Faktury z ostatnich 7 dni trafią od razu do listy nieprzejrzanych.
+Rozszerzenie sprawdza czy token działa i pobiera listę ostatnich faktur jako punkt wyjścia.
+
+<img src="store/screenshots/screenshot-3.png" width="900" alt="Konfiguracja zakończona – KSeF Monitor aktywny">
 
 ---
 
 ## Codzienne użycie
 
+<img src="store/screenshots/screenshot-1.png" width="900" alt="Lista faktur w KSeF Monitor">
+
 **Ikona w pasku** pokazuje liczbę faktur wymagających uwagi. Kliknij ją by otworzyć listę.
 
 **Lista faktur** jest podzielona na dwie sekcje:
-- **Nowe** – faktury z ostatnich 7 dni (lub innego okresu wg ustawień), pogrubione
+- **Nowe** – faktury młodsze niż wybrany próg, pogrubione
 - **Wcześniejsze** – starsze faktury zachowane jako kontekst
 
 **Akcje na fakturze:**
@@ -77,7 +82,9 @@ Po oznaczeniu możesz cofnąć akcję przez **Cofnij** (masz 4 sekundy).
 
 ## Ustawienia
 
-Otwórz rozszerzenie → ikona koła zębatego (⚙) w prawym górnym rogu.
+Otwórz rozszerzenie → ikona ⚙️ w prawym górnym rogu.
+
+<img src="store/screenshots/screenshot-2.png" width="900" alt="Konfiguracja KSeF Monitor – token i środowisko">
 
 | Ustawienie | Opis |
 |---|---|
@@ -92,6 +99,8 @@ Otwórz rozszerzenie → ikona koła zębatego (⚙) w prawym górnym rogu.
 
 ## Bezpieczeństwo
 
+<img src="store/screenshots/screenshot-4.png" width="900" alt="Bezpieczeństwo – dane zostają na Twoim komputerze">
+
 Token KSeF jest **szyfrowany lokalnie** algorytmem AES-256-GCM. Klucz szyfrowania pochodzi z Twojego PIN-u – rozszerzenie nigdy go nie przechowuje. Bez znajomości PIN-u zaszyfrowany token jest bezużyteczny.
 
 Rozszerzenie komunikuje się wyłącznie z `api.ksef.mf.gov.pl` (i odpowiednikami środowisk demo/test). Żadne dane nie są wysyłane do zewnętrznych serwerów.
@@ -105,9 +114,6 @@ Nie. Rozszerzenie loguje się samodzielnie używając tokenu i utrzymuje sesję 
 
 **Dlaczego nie widzę faktur starszych niż X dni?**
 Rozszerzenie pokazuje faktury od momentu instalacji. Starsze dostępne są bezpośrednio w portalu KSeF.
-
-**Co oznacza „Sprawdzono 04.03, 22:45"?**
-Godzina ostatniego udanego połączenia z KSeF. Jeśli jest stara, sprawdź logi błędów (link *Logi błędów* w stopce).
 
 **Zmieniłem PIN w portalu KSeF / wygenerowano nowy token. Co robię?**
 Wejdź w ustawienia → *Usuń token*, a następnie przejdź przez konfigurację od nowa z nowym tokenem.
@@ -131,3 +137,5 @@ Zgłoszenia przyjmujemy przez [Issues na GitHubie](https://github.com/olaf-wilko
 ## Prywatność
 
 Rozszerzenie nie zbiera żadnych danych analitycznych. Wszystkie dane (token, faktury, konfiguracja) przechowywane są wyłącznie lokalnie w przeglądarce i nie są nigdzie przesyłane poza KSeF API Ministerstwa Finansów.
+
+Pełna [polityka prywatności](store/privacy-policy.html).
