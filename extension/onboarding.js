@@ -14,7 +14,7 @@ const pendingConfig = {
 	pin: "",
 };
 
-const PROGRESS = { 1: 0, 2: 50, 3: 100, final: 100 };
+const PROGRESS = { 1: 20, 2: 60, 3: 100, final: 100 };
 
 // ── Nawigacja ─────────────────────────────────────────────────────────────────
 
