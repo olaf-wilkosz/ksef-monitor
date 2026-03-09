@@ -140,4 +140,4 @@ Zgłoszenia przyjmujemy przez [Issues na GitHubie](https://github.com/olaf-wilko
 
 Rozszerzenie nie zbiera żadnych danych analitycznych. Wszystkie dane (token, faktury, konfiguracja) przechowywane są wyłącznie lokalnie w przeglądarce i nie są nigdzie przesyłane poza KSeF API Ministerstwa Finansów.
 
-Pełna [polityka prywatności](store/privacy-policy.html).
+Pełna [polityka prywatności](https://olaf-wilkosz.github.io/ksef-monitor/privacy-policy.html).
