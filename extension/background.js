@@ -50,6 +50,16 @@ chrome.alarms.get(ALARM_NAME, async (alarm) => {
 	}
 });
 
+// Przywróć badge po restarcie przeglądarki (zimny start SW)
+chrome.runtime.onStartup.addListener(async () => {
+	await restoreBadgeFromState();
+	const alarm = await chrome.alarms.get(ALARM_NAME);
+	if (!alarm) {
+		const config = await getConfig();
+		await createPollAlarm(config.pollIntervalMinutes);
+	}
+});
+
 // ─── Alarm ────────────────────────────────────────────────────────────────────
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
@@ -270,7 +280,9 @@ async function runPoll(pin = null) {
 			} else if (err.status === 401 || err.status === 403 || err.code === "AUTH_REQUIRED") {
 				await clearAuthState();
 				await recordNeedsPin();
-				await setBadge(-1);
+				// Nie nadpisujemy badge czerwonym ! – pokazujemy ostatni znany stan faktur.
+				// Użytkownik zobaczy prośbę o PIN dopiero gdy otworzy popup.
+				await restoreBadgeFromState();
 				await maybeNotifyNeedsPin();
 				return;
 			}
@@ -380,6 +392,19 @@ async function testConnection(pin) {
 }
 
 // ─── Badge ────────────────────────────────────────────────────────────────────
+
+// Odczytuje stan z storage i przywraca badge – używane przy zimnym starcie
+// i przy przejściu w tryb needsPin (zamiast czerwonego !).
+async function restoreBadgeFromState() {
+	if (!(await hasToken())) return;
+	const ps = await getPollState();
+	if (ps.needsNewToken) {
+		await setBadge(-1);
+		return;
+	}
+	const inv = await getInvoiceState();
+	await setBadge(inv.pendingInvoices.length);
+}
 
 async function setBadge(count) {
 	if (count < 0) {
