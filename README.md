@@ -1,6 +1,6 @@
 # KSeF Monitor
 
-![Wersja](https://img.shields.io/badge/wersja-1.0.0-013f71) ![Licencja](https://img.shields.io/badge/licencja-MIT-green) ![Chrome](https://img.shields.io/badge/Chrome-88%2B-yellow)
+![Wersja](https://img.shields.io/github/manifest-json/v/olaf-wilkosz/ksef-monitor?filename=extension%2Fmanifest.json&branch=main&color=013f71&label=wersja) ![Licencja](https://img.shields.io/badge/licencja-MIT-green) ![Chrome](https://img.shields.io/badge/Chrome-88%2B-yellow)
 
 Rozszerzenie Chrome, które monitoruje nowe faktury zakupowe w Krajowym Systemie e-Faktur i powiadamia Cię gdy pojawi się coś nowego – bez logowania do portalu.
 
@@ -21,7 +21,7 @@ Rozszerzenie Chrome, które monitoruje nowe faktury zakupowe w Krajowym Systemie
 ## Wymagania
 
 - Przeglądarka Chrome, Edge lub Brave (wersja 88+)
-- Token KSeF z uprawnieniem **„przeglądanie faktur"** – wygenerujesz go w [portalu KSeF](https://ksef.podatki.gov.pl) w zakładce *Zarządzaj tokenami*
+- Token KSeF z uprawnieniem **„przeglądanie faktur"** – wygenerujesz go w [portalu KSeF](https://ksef.podatki.gov.pl) w zakładce _Zarządzaj tokenami_
 
 ---
 
@@ -29,7 +29,7 @@ Rozszerzenie Chrome, które monitoruje nowe faktury zakupowe w Krajowym Systemie
 
 ### Ze sklepu Chrome Web Store
 
-Kliknij **Dodaj do Chrome** na [stronie rozszerzenia](https://chrome.google.com/webstore/detail/ksef-monitor) *(wkrótce)*.
+Kliknij **Dodaj do Chrome** na [stronie rozszerzenia](https://chrome.google.com/webstore/detail/ksef-monitor) _(wkrótce)_.
 
 ### Ręcznie (tryb deweloperski)
 
@@ -65,10 +65,12 @@ Rozszerzenie sprawdza czy token działa i pobiera listę ostatnich faktur jako p
 **Ikona w pasku** pokazuje liczbę faktur wymagających uwagi. Kliknij ją by otworzyć listę.
 
 **Lista faktur** jest podzielona na dwie sekcje:
+
 - **Nowe** – faktury młodsze niż wybrany próg, pogrubione
 - **Wcześniejsze** – starsze faktury zachowane jako kontekst
 
 **Akcje na fakturze:**
+
 - `✓` – oznacz jako przejrzaną (znika z licznika)
 - `★` – przenieś z powrotem do nowych
 - `✕` – ukryj z listy
@@ -86,14 +88,14 @@ Otwórz rozszerzenie → ikona ⚙️ w prawym górnym rogu.
 
 <img src="store/screenshots/screenshot-2.png" width="900" alt="Konfiguracja KSeF Monitor – token i środowisko">
 
-| Ustawienie | Opis |
-|---|---|
-| Interwał sprawdzania | Co ile godzin rozszerzenie odpytuje KSeF (min. 1h) |
-| Nowe przez ostatnie | Faktury młodsze niż X dni trafiają do sekcji „Nowe" |
-| Środowisko KSeF | Produkcja / Demo / Test |
-| Powiadomienia push | Czy pokazywać powiadomienie systemowe przy nowej fakturze |
-| Odśwież archiwum | Pobiera faktury od nowa (np. po przerwie) |
-| Usuń token | Usuwa konfigurację i wraca do ekranu startowego |
+| Ustawienie           | Opis                                                      |
+| -------------------- | --------------------------------------------------------- |
+| Interwał sprawdzania | Co ile godzin rozszerzenie odpytuje KSeF (min. 1h)        |
+| Nowe przez ostatnie  | Faktury młodsze niż X dni trafiają do sekcji „Nowe"       |
+| Środowisko KSeF      | Produkcja / Demo / Test                                   |
+| Powiadomienia push   | Czy pokazywać powiadomienie systemowe przy nowej fakturze |
+| Odśwież archiwum     | Pobiera faktury od nowa (np. po przerwie)                 |
+| Usuń token           | Usuwa konfigurację i wraca do ekranu startowego           |
 
 ---
 
@@ -116,7 +118,7 @@ Nie. Rozszerzenie loguje się samodzielnie używając tokenu i utrzymuje sesję 
 Rozszerzenie pokazuje faktury od momentu instalacji. Starsze dostępne są bezpośrednio w portalu KSeF.
 
 **Zmieniłem PIN w portalu KSeF / wygenerowano nowy token. Co robię?**
-Wejdź w ustawienia → *Usuń token*, a następnie przejdź przez konfigurację od nowa z nowym tokenem.
+Wejdź w ustawienia → _Usuń token_, a następnie przejdź przez konfigurację od nowa z nowym tokenem.
 
 **Co to jest PRD / TR / TE na ikonie?**
 Skrót aktualnego środowiska: PRD = Produkcja, TR = Demo, TE = Test.
