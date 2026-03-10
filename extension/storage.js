@@ -9,13 +9,13 @@
  */
 
 const KEYS = {
-	ENCRYPTED_TOKEN: "encryptedToken",
-	CONFIG: "config",
-	AUTH_STATE: "authState",
-	POLL_STATE: "pollState",
-	INVOICE_STATE: "invoiceState",
-	ERROR_LOG: "errorLog",
-	ARCHIVE_UNDO_BUFFER: "archiveUndoBuffer",
+	ENCRYPTED_TOKEN: 'encryptedToken',
+	CONFIG: 'config',
+	AUTH_STATE: 'authState',
+	POLL_STATE: 'pollState',
+	INVOICE_STATE: 'invoiceState',
+	ERROR_LOG: 'errorLog',
+	ARCHIVE_UNDO_BUFFER: 'archiveUndoBuffer',
 };
 
 const ARCHIVE_MAX = 5;
@@ -55,10 +55,10 @@ export async function getConfig() {
 	return (
 		(await get(KEYS.CONFIG)) ?? {
 			nip: null,
-			environment: "production",
+			environment: 'production',
 			pollIntervalMinutes: 60,
 			notificationsEnabled: false,
-			pendingDaysThreshold: "month",
+			pendingDaysThreshold: 'month',
 		}
 	);
 }
@@ -158,9 +158,9 @@ export async function recordNeedsNewToken(message) {
 		needsPin: false,
 		backoffUntil: null,
 		consecutiveErrors: 0,
-		lastError: { code: "TOKEN_INVALID", message, time: new Date().toISOString() },
+		lastError: { code: 'TOKEN_INVALID', message, time: new Date().toISOString() },
 	});
-	await appendErrorLog({ code: "AUTH_FAILED_450", message });
+	await appendErrorLog({ code: 'AUTH_FAILED_450', message });
 }
 
 /** Błąd sieciowy/serwera. Backoff: 1h → 2h → 4h → max 24h. */
@@ -225,7 +225,7 @@ export function normalizeInvoice(raw) {
 		raw.referenceNumber ||
 		raw.invoiceId ||
 		raw.id ||
-		"";
+		'';
 
 	// Seller name – faktyczna struktura: raw.seller.name
 	const sellerName =
@@ -234,7 +234,7 @@ export function normalizeInvoice(raw) {
 		raw.subjectBy?.name ||
 		raw.sellerName ||
 		raw.issuerName ||
-		"Nieznany wystawca";
+		'Nieznany wystawca';
 
 	// NIP sprzedawcy – faktyczna struktura: raw.seller.nip
 	const sellerNip =
@@ -243,13 +243,13 @@ export function normalizeInvoice(raw) {
 		raw.subjectBy?.identifier?.value ||
 		raw.sellerNip ||
 		raw.issuerNip ||
-		"";
+		'';
 
 	// Numer faktury
-	const invoiceNumber = raw.invoiceReferenceNumber || raw.invoiceNumber || raw.number || "";
+	const invoiceNumber = raw.invoiceReferenceNumber || raw.invoiceNumber || raw.number || '';
 
 	// Data wystawienia
-	const issueDate = raw.invoicingDate || raw.issueDate || raw.issuedAt || raw.dateOfIssue || "";
+	const issueDate = raw.invoicingDate || raw.issueDate || raw.issuedAt || raw.dateOfIssue || '';
 
 	return {
 		id: ref,
@@ -259,7 +259,7 @@ export function normalizeInvoice(raw) {
 		invoiceNumber,
 		issueDate,
 		grossAmount: raw.grossAmount ?? raw.totalAmountWithTax ?? raw.totalGrossAmount ?? null,
-		currency: raw.currency || "PLN",
+		currency: raw.currency || 'PLN',
 		fetchedAt: new Date().toISOString(),
 		_raw: undefined, // nie przechowujemy surowych danych
 	};
@@ -279,16 +279,16 @@ export function normalizeInvoice(raw) {
  */
 export async function initializeArchive(rawInvoices) {
 	const cfg = await getConfig();
-	const threshold = cfg.pendingDaysThreshold ?? "month";
+	const threshold = cfg.pendingDaysThreshold ?? 'month';
 	const cutoff =
-		threshold === "month"
+		threshold === 'month'
 			? new Date(new Date().getFullYear(), new Date().getMonth(), 1) // 1. dzień bieżącego miesiąca
 			: new Date(Date.now() - Number(threshold) * 24 * 3_600_000);
 
 	const normalized = rawInvoices
 		.map(normalizeInvoice)
 		.filter((inv) => inv.id)
-		.sort((a, b) => (b.issueDate || b.fetchedAt || "").localeCompare(a.issueDate || a.fetchedAt || ""));
+		.sort((a, b) => (b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || ''));
 
 	const pending = normalized.filter((inv) => inv.issueDate && new Date(inv.issueDate) >= cutoff);
 	const older = normalized.filter((inv) => !inv.issueDate || new Date(inv.issueDate) < cutoff);
@@ -379,7 +379,7 @@ export async function ensureArchiveBackfill(rawInvoices) {
 	const archive = rawInvoices
 		.map(normalizeInvoice)
 		.filter((inv) => inv.id && seenSet.has(inv.id))
-		.sort((a, b) => (b.issueDate || b.fetchedAt || "").localeCompare(a.issueDate || a.fetchedAt || ""))
+		.sort((a, b) => (b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || ''))
 		.slice(0, ARCHIVE_MAX);
 
 	if (archive.length === 0) return;
@@ -405,7 +405,7 @@ export async function undoDismissArchive(invoiceId) {
 	const state = await getInvoiceState();
 	const merged = [undoBuffer, ...state.recentArchive]
 		.slice(0, ARCHIVE_MAX)
-		.sort((a, b) => (b.issueDate || b.fetchedAt || "").localeCompare(a.issueDate || a.fetchedAt || ""));
+		.sort((a, b) => (b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || ''));
 	await set(KEYS.INVOICE_STATE, { ...state, recentArchive: merged });
 	await remove(KEYS.ARCHIVE_UNDO_BUFFER);
 }

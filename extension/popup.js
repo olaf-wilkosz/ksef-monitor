@@ -24,17 +24,17 @@ let toastBulkSnapshot = null; // snapshot pending[] dla undo "oznacz wszystkie"
 // Reaguj na zmiany storage gdy popup jest otwarty
 // (np. sesja wygasa podczas gdy popup jest widoczny)
 chrome.storage.onChanged.addListener((changes, area) => {
-	if (area !== "local") return;
+	if (area !== 'local') return;
 	if (changes.pollState?.newValue?.needsNewToken) {
-		showView("viewNewToken");
+		showView('viewNewToken');
 	} else if (changes.pollState?.newValue?.needsPin) {
-		showView("viewPin");
+		showView('viewPin');
 	}
 });
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener('DOMContentLoaded', async () => {
 	await loadState();
 	determineAndShowView();
 	bindEvents();
@@ -42,14 +42,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 async function loadState() {
 	const result = await chrome.storage.local.get([
-		"config",
-		"authState",
-		"pollState",
-		"invoiceState",
-		"encryptedToken",
+		'config',
+		'authState',
+		'pollState',
+		'invoiceState',
+		'encryptedToken',
 	]);
 	config = result.config ?? {
-		environment: "production",
+		environment: 'production',
 		pollIntervalMinutes: 60,
 		notificationsEnabled: false,
 		companyName: null,
@@ -57,8 +57,8 @@ async function loadState() {
 	pollState = result.pollState ?? {};
 	invoiceState = migrateInvoiceState(result.invoiceState);
 
-	const labels = { production: "PRD", demo: "DEMO", test: "TEST" };
-	document.getElementById("envLabel").textContent = labels[config.environment] ?? "PRD";
+	const labels = { production: 'PRD', demo: 'DEMO', test: 'TEST' };
+	document.getElementById('envLabel').textContent = labels[config.environment] ?? 'PRD';
 }
 
 /** Migracja starszego schematu – bezpieczna fallback. */
@@ -83,29 +83,29 @@ function migrateInvoiceState(raw) {
 const PIN_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 
 function determineAndShowView() {
-	chrome.storage.local.get(["encryptedToken", "authState", "pollState"], (result) => {
+	chrome.storage.local.get(['encryptedToken', 'authState', 'pollState'], (result) => {
 		const hasToken = !!result.encryptedToken;
 		const auth = result.authState ?? {};
 		const ps = result.pollState ?? {};
 
 		if (!hasToken) {
-			showView("viewSetup");
+			showView('viewSetup');
 			return;
 		}
 
 		if (ps.needsNewToken) {
-			showView("viewNewToken");
+			showView('viewNewToken');
 			return;
 		}
 		if (ps.needsPin) {
-			showView("viewPin");
+			showView('viewPin');
 			return;
 		}
 
 		// Nieaktywność > 4h (np. po uśpieniu) → wymagaj PIN zanim pokażemy dane
 		const lastSuccess = ps.lastSuccessTime ? new Date(ps.lastSuccessTime).getTime() : 0;
 		if (lastSuccess && Date.now() - lastSuccess > PIN_TIMEOUT_MS) {
-			showView("viewPin");
+			showView('viewPin');
 			return;
 		}
 
@@ -113,24 +113,24 @@ function determineAndShowView() {
 		const validRefresh = auth.refreshToken && auth.refreshTokenExpiry > Date.now() + 30_000;
 
 		if (!validJWT && !validRefresh) {
-			showView("viewPin");
+			showView('viewPin');
 			return;
 		}
 
 		renderMainView();
-		showView("viewMain");
+		showView('viewMain');
 	});
 }
 
 function showView(id) {
-	document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
-	document.getElementById(id)?.classList.add("active");
+	document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
+	document.getElementById(id)?.classList.add('active');
 
 	// Auto-focus – kursor od razu w odpowiednim polu
 	const focusMap = {
-		viewPin: "pinBox0",
-		viewNewToken: "newTokenInput",
-		viewSettings: "selectInterval",
+		viewPin: 'pinBox0',
+		viewNewToken: 'newTokenInput',
+		viewSettings: 'selectInterval',
 	};
 	const targetId = focusMap[id];
 	if (targetId) {
@@ -147,23 +147,23 @@ function renderMainView() {
 	const count = pending.length;
 
 	// Licznik
-	const countEl = document.getElementById("invoiceCount");
+	const countEl = document.getElementById('invoiceCount');
 	countEl.textContent = count;
-	countEl.className = "counter-num" + (count === 0 ? " zero" : "");
+	countEl.className = 'counter-num' + (count === 0 ? ' zero' : '');
 
-	document.getElementById("btnMarkAll").classList.toggle("visible", count > 0);
+	document.getElementById('btnMarkAll').classList.toggle('visible', count > 0);
 
 	// Czas ostatniego sprawdzenia
 	const qt = pollState.lastSuccessTime;
-	document.getElementById("lastCheck").textContent = qt
-		? "Sprawdzono " +
-			new Date(qt).toLocaleString("pl-PL", {
-				day: "2-digit",
-				month: "2-digit",
-				hour: "2-digit",
-				minute: "2-digit",
+	document.getElementById('lastCheck').textContent = qt
+		? 'Sprawdzono ' +
+			new Date(qt).toLocaleString('pl-PL', {
+				day: '2-digit',
+				month: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit',
 			})
-		: "Nigdy nie sprawdzono";
+		: 'Nigdy nie sprawdzono';
 
 	// Status badge
 	renderStatusBadge();
@@ -173,25 +173,25 @@ function renderMainView() {
 }
 
 function renderStatusBadge() {
-	const el = document.getElementById("pollStatus");
-	el.classList.remove("clickable", "s-ok", "s-warn", "s-err", "s-pin");
+	const el = document.getElementById('pollStatus');
+	el.classList.remove('clickable', 's-ok', 's-warn', 's-err', 's-pin');
 
 	if (pollState.needsPin) {
-		el.textContent = "Wymagany PIN →";
-		el.classList.add("s-pin", "clickable");
-		el.onclick = () => showView("viewPin");
+		el.textContent = 'Wymagany PIN →';
+		el.classList.add('s-pin', 'clickable');
+		el.onclick = () => showView('viewPin');
 	} else if (pollState.backoffUntil && new Date(pollState.backoffUntil) > new Date()) {
 		const min = Math.ceil((new Date(pollState.backoffUntil) - Date.now()) / 60000);
 		el.textContent = `Backoff (${min} min)`;
-		el.classList.add("s-warn");
+		el.classList.add('s-warn');
 		el.onclick = null;
 	} else if ((pollState.consecutiveErrors ?? 0) > 0) {
 		el.textContent = `Błąd (${pollState.consecutiveErrors}×)`;
-		el.classList.add("s-err");
+		el.classList.add('s-err');
 		el.onclick = null;
 	} else {
-		el.textContent = "OK";
-		el.classList.add("s-ok");
+		el.textContent = 'OK';
+		el.classList.add('s-ok');
 		el.onclick = null;
 	}
 }
@@ -206,24 +206,24 @@ const CHEVRON_SVG = `<svg width="10" height="10" viewBox="0 0 10 10" fill="none"
 const sectionCollapsed = { pending: false, archive: false };
 
 function makeSectionLabel(text, type, bodyEl) {
-	const lbl = document.createElement("div");
-	lbl.className = `list-section-label${type === "pending" ? " pending" : ""}`;
-	if (sectionCollapsed[type]) lbl.classList.add("collapsed");
+	const lbl = document.createElement('div');
+	lbl.className = `list-section-label${type === 'pending' ? ' pending' : ''}`;
+	if (sectionCollapsed[type]) lbl.classList.add('collapsed');
 
 	lbl.innerHTML = `<span>${text}</span><span class="section-chevron">${CHEVRON_SVG}</span>`;
 
 	const toggle = () => {
 		sectionCollapsed[type] = !sectionCollapsed[type];
-		lbl.classList.toggle("collapsed", sectionCollapsed[type]);
-		bodyEl.classList.toggle("collapsed", sectionCollapsed[type]);
+		lbl.classList.toggle('collapsed', sectionCollapsed[type]);
+		bodyEl.classList.toggle('collapsed', sectionCollapsed[type]);
 	};
-	lbl.addEventListener("click", toggle);
+	lbl.addEventListener('click', toggle);
 	return lbl;
 }
 
 function renderInvoiceList(pending, archive) {
-	const list = document.getElementById("invoiceList");
-	list.innerHTML = "";
+	const list = document.getElementById('invoiceList');
+	list.innerHTML = '';
 
 	const hasPending = pending.length > 0;
 	const hasArchive = archive.length > 0;
@@ -245,17 +245,17 @@ function renderInvoiceList(pending, archive) {
 
 	if (hasPending) {
 		const sorted = [...pending].sort((a, b) =>
-			(b.issueDate || b.fetchedAt || "").localeCompare(a.issueDate || a.fetchedAt || ""),
+			(b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || '')
 		);
-		const rows = sorted.map((inv) => buildInvoiceRow(inv, "pending"));
+		const rows = sorted.map((inv) => buildInvoiceRow(inv, 'pending'));
 
 		if (hasArchive) {
-			const body = document.createElement("div");
-			body.className = "section-body" + (sectionCollapsed.pending ? " collapsed" : "");
-			const inner = document.createElement("div"); // wymagane przez grid-trick
+			const body = document.createElement('div');
+			body.className = 'section-body' + (sectionCollapsed.pending ? ' collapsed' : '');
+			const inner = document.createElement('div'); // wymagane przez grid-trick
 			rows.forEach((r) => inner.appendChild(r));
 			body.appendChild(inner);
-			list.appendChild(makeSectionLabel(`Nowe (${pending.length})`, "pending", body));
+			list.appendChild(makeSectionLabel(`Nowe (${pending.length})`, 'pending', body));
 			list.appendChild(body);
 		} else {
 			rows.forEach((r) => list.appendChild(r));
@@ -263,40 +263,40 @@ function renderInvoiceList(pending, archive) {
 	}
 
 	if (hasArchive) {
-		const body = document.createElement("div");
-		body.className = "section-body" + (sectionCollapsed.archive ? " collapsed" : "");
-		const inner = document.createElement("div"); // wymagane przez grid-trick
-		archive.forEach((inv) => inner.appendChild(buildInvoiceRow(inv, "archive")));
+		const body = document.createElement('div');
+		body.className = 'section-body' + (sectionCollapsed.archive ? ' collapsed' : '');
+		const inner = document.createElement('div'); // wymagane przez grid-trick
+		archive.forEach((inv) => inner.appendChild(buildInvoiceRow(inv, 'archive')));
 		body.appendChild(inner);
-		list.appendChild(makeSectionLabel(`Wcześniejsze (${archive.length})`, "archive", body));
+		list.appendChild(makeSectionLabel(`Wcześniejsze (${archive.length})`, 'archive', body));
 		list.appendChild(body);
 	}
 }
 
 function buildInvoiceRow(inv, type) {
-	const item = document.createElement("div");
+	const item = document.createElement('div');
 	item.className = `inv-item ${type}`;
 	item.dataset.id = inv.id;
 
 	const date = inv.issueDate
-		? new Date(inv.issueDate).toLocaleDateString("pl-PL", { day: "2-digit", month: "2-digit", year: "2-digit" })
-		: "";
+		? new Date(inv.issueDate).toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: '2-digit' })
+		: '';
 	const amount =
 		inv.grossAmount != null
-			? inv.grossAmount.toLocaleString("pl-PL", {
-					style: "currency",
-					currency: inv.currency || "PLN",
+			? inv.grossAmount.toLocaleString('pl-PL', {
+					style: 'currency',
+					currency: inv.currency || 'PLN',
 					maximumFractionDigits: 2,
 				})
-			: "";
+			: '';
 
 	const portalTitle = inv.ksefRef
 		? `Otwórz Aplikację Podatnika KSeF\n(numer ${inv.ksefRef} zostanie skopiowany do schowka)`
-		: "Otwórz Aplikację Podatnika KSeF";
+		: 'Otwórz Aplikację Podatnika KSeF';
 
 	// Akcje na poziomie meta (wiersz 2, prawa kolumna)
 	const actionsHtml =
-		type === "pending"
+		type === 'pending'
 			? `<div class="inv-actions">
          <button class="inv-act inv-act-done" title="Oznacz jako przejrzaną">✓</button>
        </div>`
@@ -316,22 +316,22 @@ function buildInvoiceRow(inv, type) {
     </div>
     ${actionsHtml}`;
 
-	item.querySelector(".inv-portal").addEventListener("click", (e) => {
+	item.querySelector('.inv-portal').addEventListener('click', (e) => {
 		e.stopPropagation();
 		handleOpenInPortal(inv.ksefRef, config.environment);
 	});
 
-	if (type === "pending") {
-		item.querySelector(".inv-act-done").addEventListener("click", (e) => {
+	if (type === 'pending') {
+		item.querySelector('.inv-act-done').addEventListener('click', (e) => {
 			e.stopPropagation();
 			handleMarkNoticed(inv, item);
 		});
 	} else {
-		item.querySelector(".inv-act-star").addEventListener("click", (e) => {
+		item.querySelector('.inv-act-star').addEventListener('click', (e) => {
 			e.stopPropagation();
 			handleRestoreToPending(inv, item);
 		});
-		item.querySelector(".inv-act-hide").addEventListener("click", (e) => {
+		item.querySelector('.inv-act-hide').addEventListener('click', (e) => {
 			e.stopPropagation();
 			handleDismissArchive(inv, item);
 		});
@@ -343,27 +343,27 @@ function buildInvoiceRow(inv, type) {
 // ─── Mark as noticed + undo toast ─────────────────────────────────────────────
 
 async function handleRestoreToPending(inv, itemEl) {
-	itemEl.classList.add("dismissing");
-	await chrome.runtime.sendMessage({ type: "UNDO_NOTICED", invoiceId: inv.id });
+	itemEl.classList.add('dismissing');
+	await chrome.runtime.sendMessage({ type: 'UNDO_NOTICED', invoiceId: inv.id });
 	invoiceState.pendingInvoices = [inv, ...(invoiceState.pendingInvoices ?? [])];
 	invoiceState.recentArchive = (invoiceState.recentArchive ?? []).filter((i) => i.id !== inv.id);
 	renderMainView();
 }
 
 async function handleDismissArchive(inv, itemEl) {
-	itemEl.classList.add("dismissing");
-	await chrome.runtime.sendMessage({ type: "DISMISS_ARCHIVE", invoiceId: inv.id });
+	itemEl.classList.add('dismissing');
+	await chrome.runtime.sendMessage({ type: 'DISMISS_ARCHIVE', invoiceId: inv.id });
 	invoiceState.recentArchive = (invoiceState.recentArchive ?? []).filter((i) => i.id !== inv.id);
 	invoiceState._lastDismissed = inv; // zapamiętaj do undo
 	renderMainView();
-	showToast(inv, "archive");
+	showToast(inv, 'archive');
 }
 
 async function handleMarkNoticed(inv, itemEl) {
 	// Animacja znikania
-	itemEl.classList.add("dismissing");
+	itemEl.classList.add('dismissing');
 
-	await chrome.runtime.sendMessage({ type: "MARK_NOTICED", invoiceId: inv.id });
+	await chrome.runtime.sendMessage({ type: 'MARK_NOTICED', invoiceId: inv.id });
 
 	// Aktualizuj lokalny stan
 	invoiceState.pendingInvoices = (invoiceState.pendingInvoices ?? []).filter((i) => i.id !== inv.id);
@@ -373,7 +373,7 @@ async function handleMarkNoticed(inv, itemEl) {
 	showToast(inv);
 }
 
-function showToast(inv, type = "pending") {
+function showToast(inv, type = 'pending') {
 	if (toastTimer) {
 		clearTimeout(toastTimer);
 		toastTimer = null;
@@ -381,9 +381,9 @@ function showToast(inv, type = "pending") {
 	toastInvoiceId = inv.id;
 	toastInvoiceType = type;
 	toastBulkSnapshot = null;
-	document.getElementById("toastMsg").textContent = `✓ ${trunc(inv.sellerName || "Faktura", 28)}`;
-	document.getElementById("toastUndo").style.display = "";
-	document.getElementById("toast").classList.add("visible");
+	document.getElementById('toastMsg').textContent = `✓ ${trunc(inv.sellerName || 'Faktura', 28)}`;
+	document.getElementById('toastUndo').style.display = '';
+	document.getElementById('toast').classList.add('visible');
 	toastTimer = setTimeout(dismissToast, 4000);
 }
 
@@ -395,9 +395,9 @@ function showInfoToast(msg) {
 	toastInvoiceId = null;
 	toastInvoiceType = null;
 	toastBulkSnapshot = null;
-	document.getElementById("toastMsg").textContent = msg;
-	document.getElementById("toastUndo").style.display = "none";
-	document.getElementById("toast").classList.add("visible");
+	document.getElementById('toastMsg').textContent = msg;
+	document.getElementById('toastUndo').style.display = 'none';
+	document.getElementById('toast').classList.add('visible');
 	toastTimer = setTimeout(dismissToast, 3000);
 }
 
@@ -406,19 +406,19 @@ function showBulkToast(snapshot) {
 		clearTimeout(toastTimer);
 		toastTimer = null;
 	}
-	toastInvoiceId = "__bulk__";
-	toastInvoiceType = "bulk";
+	toastInvoiceId = '__bulk__';
+	toastInvoiceType = 'bulk';
 	toastBulkSnapshot = snapshot;
 	const n = snapshot.length;
-	document.getElementById("toastMsg").textContent =
-		`✓ Oznaczono ${n} ${n === 1 ? "fakturę" : n < 5 ? "faktury" : "faktur"}`;
-	document.getElementById("toastUndo").style.display = ""; // przywróć – showInfoToast go chowa
-	document.getElementById("toast").classList.add("visible");
+	document.getElementById('toastMsg').textContent =
+		`✓ Oznaczono ${n} ${n === 1 ? 'fakturę' : n < 5 ? 'faktury' : 'faktur'}`;
+	document.getElementById('toastUndo').style.display = ''; // przywróć – showInfoToast go chowa
+	document.getElementById('toast').classList.add('visible');
 	toastTimer = setTimeout(dismissToast, 4000);
 }
 
 function dismissToast() {
-	document.getElementById("toast").classList.remove("visible");
+	document.getElementById('toast').classList.remove('visible');
 	toastInvoiceId = null;
 	toastInvoiceType = null;
 	toastBulkSnapshot = null;
@@ -432,27 +432,27 @@ async function handleUndoNoticed() {
 	const snapshot = toastBulkSnapshot;
 	dismissToast();
 
-	if (type === "bulk") {
+	if (type === 'bulk') {
 		// Przywróć wszystkie z powrotem do pending
-		await chrome.runtime.sendMessage({ type: "UNDO_MARK_ALL", invoices: snapshot });
+		await chrome.runtime.sendMessage({ type: 'UNDO_MARK_ALL', invoices: snapshot });
 		invoiceState.pendingInvoices = [...(snapshot ?? []), ...(invoiceState.pendingInvoices ?? [])];
 		invoiceState.recentArchive = (invoiceState.recentArchive ?? []).filter(
-			(inv) => !(snapshot ?? []).find((s) => s.id === inv.id),
+			(inv) => !(snapshot ?? []).find((s) => s.id === inv.id)
 		);
-	} else if (type === "archive") {
-		await chrome.runtime.sendMessage({ type: "UNDO_DISMISS_ARCHIVE", invoiceId: id });
+	} else if (type === 'archive') {
+		await chrome.runtime.sendMessage({ type: 'UNDO_DISMISS_ARCHIVE', invoiceId: id });
 		const restored = invoiceState._lastDismissed;
 		if (restored) {
 			invoiceState.recentArchive = [restored, ...(invoiceState.recentArchive ?? [])]
 				.slice(0, 5)
-				.sort((a, b) => (b.issueDate || b.fetchedAt || "").localeCompare(a.issueDate || a.fetchedAt || ""));
+				.sort((a, b) => (b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || ''));
 			delete invoiceState._lastDismissed;
 		} else {
 			await loadState();
 		}
 	} else {
 		// pending → przywróć z archiwum
-		await chrome.runtime.sendMessage({ type: "UNDO_NOTICED", invoiceId: id });
+		await chrome.runtime.sendMessage({ type: 'UNDO_NOTICED', invoiceId: id });
 		const restored = (invoiceState.recentArchive ?? []).find((i) => i.id === id);
 		if (restored) {
 			invoiceState.pendingInvoices = [restored, ...(invoiceState.pendingInvoices ?? [])];
@@ -466,7 +466,7 @@ async function handleUndoNoticed() {
 // ─── Zdarzenia ────────────────────────────────────────────────────────────────
 
 function bindEvents() {
-	document.getElementById("btnOpenOnboarding").addEventListener("click", async () => {
+	document.getElementById('btnOpenOnboarding').addEventListener('click', async () => {
 		const W = 580,
 			H = 680,
 			MARGIN = 16;
@@ -478,8 +478,8 @@ function bindEvents() {
 			top = (win.top ?? 0) + MARGIN;
 		} catch {}
 		chrome.windows.create({
-			url: chrome.runtime.getURL("onboarding.html"),
-			type: "popup",
+			url: chrome.runtime.getURL('onboarding.html'),
+			type: 'popup',
 			width: W,
 			height: H,
 			left,
@@ -488,83 +488,83 @@ function bindEvents() {
 		window.close();
 	});
 
-	document.getElementById("btnPinConfirm").addEventListener("click", handlePinConfirm);
-	document.getElementById("btnNewTokenConfirm").addEventListener("click", handleNewTokenConfirm);
+	document.getElementById('btnPinConfirm').addEventListener('click', handlePinConfirm);
+	document.getElementById('btnNewTokenConfirm').addEventListener('click', handleNewTokenConfirm);
 
 	// Live NIP extraction from new token input
-	document.getElementById("newTokenInput").addEventListener("input", () => {
-		const val = document.getElementById("newTokenInput").value.trim();
-		const nipInfo = document.getElementById("newTokenNipConfirm");
+	document.getElementById('newTokenInput').addEventListener('input', () => {
+		const val = document.getElementById('newTokenInput').value.trim();
+		const nipInfo = document.getElementById('newTokenNipConfirm');
 		const match = val.match(/\|nip-(\d{10})\|/);
 		if (match) {
 			nipInfo.textContent = `✓ Wykryto NIP: ${match[1]}`;
-			nipInfo.style.display = "block";
+			nipInfo.style.display = 'block';
 		} else {
-			nipInfo.style.display = "none";
+			nipInfo.style.display = 'none';
 		}
 	});
 	// OTP boxes dla viewPin i viewNewToken
-	initPopupOtp(["pinBox0", "pinBox1", "pinBox2", "pinBox3"], "pinToggle", handlePinConfirm);
+	initPopupOtp(['pinBox0', 'pinBox1', 'pinBox2', 'pinBox3'], 'pinToggle', handlePinConfirm);
 	initPopupOtp(
-		["newTokenPinBox0", "newTokenPinBox1", "newTokenPinBox2", "newTokenPinBox3"],
-		"newTokenPinToggle",
-		handleNewTokenConfirm,
+		['newTokenPinBox0', 'newTokenPinBox1', 'newTokenPinBox2', 'newTokenPinBox3'],
+		'newTokenPinToggle',
+		handleNewTokenConfirm
 	);
 
-	document.getElementById("btnCheckNow").addEventListener("click", handleCheckNow);
+	document.getElementById('btnCheckNow').addEventListener('click', handleCheckNow);
 
-	document.getElementById("btnMarkAll").addEventListener("click", async () => {
+	document.getElementById('btnMarkAll').addEventListener('click', async () => {
 		const snapshot = [...(invoiceState.pendingInvoices ?? [])];
 		if (snapshot.length === 0) return;
 
-		await chrome.runtime.sendMessage({ type: "MARK_ALL_NOTICED" });
+		await chrome.runtime.sendMessage({ type: 'MARK_ALL_NOTICED' });
 		invoiceState.recentArchive = [...snapshot, ...(invoiceState.recentArchive ?? [])].slice(0, 5);
 		invoiceState.pendingInvoices = [];
 		renderMainView();
 		showBulkToast(snapshot);
 	});
 
-	document.getElementById("btnReinitArchive").addEventListener("click", handleReinitArchive);
-	document.getElementById("btnSettings").addEventListener("click", showSettingsView);
-	document.getElementById("btnSaveSettings").addEventListener("click", handleSaveSettings);
-	document.getElementById("btnBackFromSettings").addEventListener("click", async () => {
+	document.getElementById('btnReinitArchive').addEventListener('click', handleReinitArchive);
+	document.getElementById('btnSettings').addEventListener('click', showSettingsView);
+	document.getElementById('btnSaveSettings').addEventListener('click', handleSaveSettings);
+	document.getElementById('btnBackFromSettings').addEventListener('click', async () => {
 		await loadState();
 		renderMainView();
-		showView("viewMain");
+		showView('viewMain');
 	});
-	document.getElementById("btnRemoveToken").addEventListener("click", handleRemoveToken);
+	document.getElementById('btnRemoveToken').addEventListener('click', handleRemoveToken);
 
-	document.getElementById("btnErrorBack").addEventListener("click", determineAndShowView);
-	document.getElementById("btnLogsBack").addEventListener("click", determineAndShowView);
-	document.getElementById("btnClearLogs").addEventListener("click", async () => {
-		await chrome.storage.local.remove("errorLog");
+	document.getElementById('btnErrorBack').addEventListener('click', determineAndShowView);
+	document.getElementById('btnLogsBack').addEventListener('click', determineAndShowView);
+	document.getElementById('btnClearLogs').addEventListener('click', async () => {
+		await chrome.storage.local.remove('errorLog');
 		renderLogsList([]);
 	});
-	document.getElementById("lnkLogs").addEventListener("click", (e) => {
+	document.getElementById('lnkLogs').addEventListener('click', (e) => {
 		e.preventDefault();
 		showErrorLogs();
 	});
 
-	document.getElementById("lnkContact").addEventListener("click", async (e) => {
+	document.getElementById('lnkContact').addEventListener('click', async (e) => {
 		e.preventDefault();
 		// Mailto z pre-wypełnionym tematem zawierającym wersję – ułatwia sortowanie zgłoszeń
 		const manifest = chrome.runtime.getManifest();
 		const subject = encodeURIComponent(`KSeF Monitor v${manifest.version} – feedback`);
-		const body = encodeURIComponent("Cześć,\n\nChciałem zgłosić / zapytać o:\n\n");
-		window.open(`mailto:ksef-monitor@pm.me?subject=${subject}&body=${body}`, "_blank");
+		const body = encodeURIComponent('Cześć,\n\nChciałem zgłosić / zapytać o:\n\n');
+		window.open(`mailto:ksef-monitor@pm.me?subject=${subject}&body=${body}`, '_blank');
 	});
 
-	document.getElementById("toastUndo").addEventListener("click", handleUndoNoticed);
+	document.getElementById('toastUndo').addEventListener('click', handleUndoNoticed);
 
 	// Wstrzymaj odliczanie gdy kursor na toaście
-	const toastEl = document.getElementById("toast");
-	toastEl.addEventListener("mouseenter", () => {
+	const toastEl = document.getElementById('toast');
+	toastEl.addEventListener('mouseenter', () => {
 		if (toastTimer) {
 			clearTimeout(toastTimer);
 			toastTimer = null;
 		}
 	});
-	toastEl.addEventListener("mouseleave", () => {
+	toastEl.addEventListener('mouseleave', () => {
 		if (toastInvoiceId) toastTimer = setTimeout(dismissToast, 2000);
 	});
 }
@@ -574,7 +574,7 @@ function bindEvents() {
 // ── OTP PIN helpers ───────────────────────────────────────────────────────────
 
 function getOtpValue(ids) {
-	return ids.map((id) => document.getElementById(id)?.value ?? "").join("");
+	return ids.map((id) => document.getElementById(id)?.value ?? '').join('');
 }
 
 function initPopupOtp(ids, toggleId, onComplete) {
@@ -582,39 +582,39 @@ function initPopupOtp(ids, toggleId, onComplete) {
 	if (boxes.some((b) => !b)) return; // view nie wyrenderowany jeszcze
 
 	boxes.forEach((box, i) => {
-		box.addEventListener("keydown", (e) => {
-			if (e.key === "Backspace") {
+		box.addEventListener('keydown', (e) => {
+			if (e.key === 'Backspace') {
 				if (box.value) {
-					box.value = "";
-					box.classList.remove("filled");
+					box.value = '';
+					box.classList.remove('filled');
 				} else if (i > 0) {
 					boxes[i - 1].focus();
-					boxes[i - 1].value = "";
-					boxes[i - 1].classList.remove("filled");
+					boxes[i - 1].value = '';
+					boxes[i - 1].classList.remove('filled');
 				}
 				e.preventDefault();
-			} else if (e.key === "ArrowLeft" && i > 0) {
+			} else if (e.key === 'ArrowLeft' && i > 0) {
 				boxes[i - 1].focus();
-			} else if (e.key === "ArrowRight" && i < boxes.length - 1) {
+			} else if (e.key === 'ArrowRight' && i < boxes.length - 1) {
 				boxes[i + 1].focus();
-			} else if (e.key === "Enter") {
+			} else if (e.key === 'Enter') {
 				onComplete();
 			}
 		});
-		box.addEventListener("input", (e) => {
-			const val = (e.data || "").replace(/\D/g, "");
-			box.value = val ? val[val.length - 1] : "";
-			box.classList.toggle("filled", !!box.value);
+		box.addEventListener('input', (e) => {
+			const val = (e.data || '').replace(/\D/g, '');
+			box.value = val ? val[val.length - 1] : '';
+			box.classList.toggle('filled', !!box.value);
 			if (box.value && i < boxes.length - 1) boxes[i + 1].focus();
 			else if (box.value && i === boxes.length - 1) onComplete();
 		});
-		box.addEventListener("focus", () => box.select());
-		box.addEventListener("paste", (e) => {
+		box.addEventListener('focus', () => box.select());
+		box.addEventListener('paste', (e) => {
 			e.preventDefault();
-			const digits = (e.clipboardData.getData("text") || "").replace(/\D/g, "").slice(0, boxes.length);
+			const digits = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, boxes.length);
 			boxes.forEach((b, j) => {
-				b.value = digits[j] || "";
-				b.classList.toggle("filled", !!b.value);
+				b.value = digits[j] || '';
+				b.classList.toggle('filled', !!b.value);
 			});
 			const next = Math.min(digits.length, boxes.length - 1);
 			boxes[next].focus();
@@ -624,10 +624,10 @@ function initPopupOtp(ids, toggleId, onComplete) {
 
 	const toggle = document.getElementById(toggleId);
 	if (toggle) {
-		toggle.addEventListener("click", () => {
-			const hidden = boxes[0].type === "password";
-			boxes.forEach((b) => (b.type = hidden ? "text" : "password"));
-			toggle.classList.toggle("active", hidden);
+		toggle.addEventListener('click', () => {
+			const hidden = boxes[0].type === 'password';
+			boxes.forEach((b) => (b.type = hidden ? 'text' : 'password'));
+			toggle.classList.toggle('active', hidden);
 		});
 	}
 }
@@ -635,29 +635,29 @@ function initPopupOtp(ids, toggleId, onComplete) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function handlePinConfirm() {
-	const pin = getOtpValue(["pinBox0", "pinBox1", "pinBox2", "pinBox3"]);
-	const errEl = document.getElementById("pinError");
+	const pin = getOtpValue(['pinBox0', 'pinBox1', 'pinBox2', 'pinBox3']);
+	const errEl = document.getElementById('pinError');
 	if (pin.length < 4) {
-		errEl.textContent = "Wpisz 4-cyfrowy PIN.";
-		errEl.style.display = "block";
+		errEl.textContent = 'Wpisz 4-cyfrowy PIN.';
+		errEl.style.display = 'block';
 		return;
 	}
 
-	const btn = document.getElementById("btnPinConfirm");
+	const btn = document.getElementById('btnPinConfirm');
 	btn.disabled = true;
 	btn.innerHTML = `<div class="spinner"></div> Autoryzuję...`;
-	errEl.style.display = "none";
+	errEl.style.display = 'none';
 
 	try {
-		await chrome.runtime.sendMessage({ type: "CLEAR_BACKOFF" });
-		const response = await chrome.runtime.sendMessage({ type: "POLL_NOW", pin });
+		await chrome.runtime.sendMessage({ type: 'CLEAR_BACKOFF' });
+		const response = await chrome.runtime.sendMessage({ type: 'POLL_NOW', pin });
 
 		if (response.ok) {
-			["pinBox0", "pinBox1", "pinBox2", "pinBox3"].forEach((id) => {
+			['pinBox0', 'pinBox1', 'pinBox2', 'pinBox3'].forEach((id) => {
 				const b = document.getElementById(id);
 				if (b) {
-					b.value = "";
-					b.classList.remove("filled");
+					b.value = '';
+					b.classList.remove('filled');
 				}
 			});
 			await loadState();
@@ -666,21 +666,21 @@ async function handlePinConfirm() {
 			// zamiast bezpośrednio do viewMain (nie ufamy lokalnej zmiennej)
 			determineAndShowView();
 		} else {
-			const err = response.error ?? "";
+			const err = response.error ?? '';
 			const isInvalidPin =
-				err.includes("INVALID_PIN") ||
-				err.toLowerCase().includes("pin") ||
-				err.toLowerCase().includes("invalid") ||
-				err.toLowerCase().includes("decrypt");
-			errEl.textContent = isInvalidPin ? "Nieprawidłowy PIN. Spróbuj ponownie." : `Błąd: ${err}`;
-			errEl.style.display = "block";
+				err.includes('INVALID_PIN') ||
+				err.toLowerCase().includes('pin') ||
+				err.toLowerCase().includes('invalid') ||
+				err.toLowerCase().includes('decrypt');
+			errEl.textContent = isInvalidPin ? 'Nieprawidłowy PIN. Spróbuj ponownie.' : `Błąd: ${err}`;
+			errEl.style.display = 'block';
 		}
 	} catch (err) {
-		errEl.textContent = "Błąd połączenia: " + err.message;
-		errEl.style.display = "block";
+		errEl.textContent = 'Błąd połączenia: ' + err.message;
+		errEl.style.display = 'block';
 	} finally {
 		btn.disabled = false;
-		btn.textContent = "Zaloguj ponownie";
+		btn.textContent = 'Zaloguj ponownie';
 	}
 }
 
@@ -692,20 +692,20 @@ function extractNipFromToken(token) {
 }
 
 async function handleNewTokenConfirm() {
-	const token = document.getElementById("newTokenInput").value.trim();
-	const pin = getOtpValue(["newTokenPinBox0", "newTokenPinBox1", "newTokenPinBox2", "newTokenPinBox3"]);
-	const errEl = document.getElementById("newTokenError");
-	const btn = document.getElementById("btnNewTokenConfirm");
-	errEl.style.display = "none";
+	const token = document.getElementById('newTokenInput').value.trim();
+	const pin = getOtpValue(['newTokenPinBox0', 'newTokenPinBox1', 'newTokenPinBox2', 'newTokenPinBox3']);
+	const errEl = document.getElementById('newTokenError');
+	const btn = document.getElementById('btnNewTokenConfirm');
+	errEl.style.display = 'none';
 
 	if (!token || token.length < 20) {
-		errEl.textContent = "Token jest za krótki – wklej pełny token z portalu KSeF.";
-		errEl.style.display = "block";
+		errEl.textContent = 'Token jest za krótki – wklej pełny token z portalu KSeF.';
+		errEl.style.display = 'block';
 		return;
 	}
 	if (pin.length < 4) {
-		errEl.textContent = "Wprowadź 4-cyfrowy PIN.";
-		errEl.style.display = "block";
+		errEl.textContent = 'Wprowadź 4-cyfrowy PIN.';
+		errEl.style.display = 'block';
 		return;
 	}
 
@@ -716,169 +716,169 @@ async function handleNewTokenConfirm() {
 
 	try {
 		const response = await chrome.runtime.sendMessage({
-			type: "UPDATE_TOKEN",
+			type: 'UPDATE_TOKEN',
 			token,
 			pin,
 			nip: nipFromToken,
 		});
 		if (response.ok) {
-			document.getElementById("newTokenInput").value = "";
-			["newTokenPinBox0", "newTokenPinBox1", "newTokenPinBox2", "newTokenPinBox3"].forEach((id) => {
+			document.getElementById('newTokenInput').value = '';
+			['newTokenPinBox0', 'newTokenPinBox1', 'newTokenPinBox2', 'newTokenPinBox3'].forEach((id) => {
 				const b = document.getElementById(id);
 				if (b) {
-					b.value = "";
-					b.classList.remove("filled");
+					b.value = '';
+					b.classList.remove('filled');
 				}
 			});
-			await chrome.runtime.sendMessage({ type: "CLEAR_BACKOFF" });
-			const pollResp = await chrome.runtime.sendMessage({ type: "POLL_NOW", pin });
+			await chrome.runtime.sendMessage({ type: 'CLEAR_BACKOFF' });
+			const pollResp = await chrome.runtime.sendMessage({ type: 'POLL_NOW', pin });
 			await loadState();
 			if (pollResp.ok) {
 				renderMainView();
 				determineAndShowView();
 			} else {
 				errEl.textContent = `Token zapisany, ale połączenie nieudane: ${pollResp.error}`;
-				errEl.style.display = "block";
+				errEl.style.display = 'block';
 			}
 		} else {
-			errEl.textContent = response.error ?? "Nie udało się zapisać tokenu.";
-			errEl.style.display = "block";
+			errEl.textContent = response.error ?? 'Nie udało się zapisać tokenu.';
+			errEl.style.display = 'block';
 		}
 	} catch (err) {
-		errEl.textContent = "Błąd: " + err.message;
-		errEl.style.display = "block";
+		errEl.textContent = 'Błąd: ' + err.message;
+		errEl.style.display = 'block';
 	} finally {
 		btn.disabled = false;
-		btn.textContent = "Zapisz nowy token";
+		btn.textContent = 'Zapisz nowy token';
 	}
 }
 
 async function handleCheckNow() {
-	const btn = document.getElementById("btnCheckNow");
+	const btn = document.getElementById('btnCheckNow');
 	btn.disabled = true;
 	btn.innerHTML = `<div class="spinner"></div> Sprawdzam...`;
 
-	await chrome.runtime.sendMessage({ type: "CLEAR_BACKOFF" }).catch(() => {});
+	await chrome.runtime.sendMessage({ type: 'CLEAR_BACKOFF' }).catch(() => {});
 
 	try {
-		const response = await chrome.runtime.sendMessage({ type: "POLL_NOW" });
+		const response = await chrome.runtime.sendMessage({ type: 'POLL_NOW' });
 		await loadState();
 
 		if (response.ok) {
 			renderMainView();
 		} else if (
 			response.status === 401 ||
-			response.error?.includes("PIN") ||
-			response.error?.includes("AUTH") ||
-			response.error?.includes("Sesja")
+			response.error?.includes('PIN') ||
+			response.error?.includes('AUTH') ||
+			response.error?.includes('Sesja')
 		) {
-			showView("viewPin");
+			showView('viewPin');
 		} else {
-			showError("Błąd sprawdzania", response.error);
+			showError('Błąd sprawdzania', response.error);
 		}
 	} catch (err) {
-		showError("Błąd połączenia", err.message);
+		showError('Błąd połączenia', err.message);
 	} finally {
 		btn.disabled = false;
-		btn.innerHTML = "🔄 Sprawdź teraz";
+		btn.innerHTML = '🔄 Sprawdź teraz';
 	}
 }
 
 // ─── Odśwież archiwum ─────────────────────────────────────────────────────────
 
 async function handleReinitArchive() {
-	const btn = document.getElementById("btnReinitArchive");
-	const errEl = document.getElementById("reinitError");
+	const btn = document.getElementById('btnReinitArchive');
+	const errEl = document.getElementById('reinitError');
 	btn.disabled = true;
-	btn.textContent = "⏳ Pobieranie...";
-	errEl.style.display = "none";
+	btn.textContent = '⏳ Pobieranie...';
+	errEl.style.display = 'none';
 
 	try {
-		const response = await chrome.runtime.sendMessage({ type: "REINITIALIZE_ARCHIVE" });
+		const response = await chrome.runtime.sendMessage({ type: 'REINITIALIZE_ARCHIVE' });
 
 		if (response.ok) {
 			await loadState();
 			renderMainView();
-			showView("viewMain");
+			showView('viewMain');
 			showInfoToast(`✓ Pobrano ${response.count ?? 0} faktur`);
-		} else if (response.status === 401 || response.error?.includes("PIN") || response.error?.includes("Sesja")) {
-			errEl.textContent = "Sesja wygasła. Wróć i użyj \u201eSprawdź teraz\u201d żeby ponownie się zalogować.";
-			errEl.style.display = "block";
+		} else if (response.status === 401 || response.error?.includes('PIN') || response.error?.includes('Sesja')) {
+			errEl.textContent = 'Sesja wygasła. Wróć i użyj \u201eSprawdź teraz\u201d żeby ponownie się zalogować.';
+			errEl.style.display = 'block';
 		} else if (
 			response.status === 429 ||
-			response.error?.includes("RATE_LIMIT") ||
-			response.error?.includes("429")
+			response.error?.includes('RATE_LIMIT') ||
+			response.error?.includes('429')
 		) {
 			const match = response.error?.match(/(\d+)s/);
-			const wait = match ? `Odczekaj ${Math.ceil(match[1] / 60)} min.` : "Odczekaj chwilę.";
+			const wait = match ? `Odczekaj ${Math.ceil(match[1] / 60)} min.` : 'Odczekaj chwilę.';
 			errEl.textContent = `Limit zapytań KSeF (HTTP 429). ${wait}`;
-			errEl.style.display = "block";
+			errEl.style.display = 'block';
 		} else {
-			errEl.textContent = response.error ?? "Nieznany błąd";
-			errEl.style.display = "block";
+			errEl.textContent = response.error ?? 'Nieznany błąd';
+			errEl.style.display = 'block';
 		}
 	} catch (err) {
-		errEl.textContent = "Błąd połączenia: " + err.message;
-		errEl.style.display = "block";
+		errEl.textContent = 'Błąd połączenia: ' + err.message;
+		errEl.style.display = 'block';
 	} finally {
 		btn.disabled = false;
-		btn.textContent = "🔄 Odśwież archiwum faktur";
+		btn.textContent = '🔄 Odśwież archiwum faktur';
 	}
 }
 
 // ─── Ustawienia ───────────────────────────────────────────────────────────────
 
 function showSettingsView() {
-	document.getElementById("selectInterval").value = String(config.pollIntervalMinutes ?? 60);
-	document.getElementById("selectEnv").value = config.environment ?? "production";
-	document.getElementById("selectPendingDays").value = String(config.pendingDaysThreshold ?? "month");
+	document.getElementById('selectInterval').value = String(config.pollIntervalMinutes ?? 60);
+	document.getElementById('selectEnv').value = config.environment ?? 'production';
+	document.getElementById('selectPendingDays').value = String(config.pendingDaysThreshold ?? 'month');
 
-	const companyEl = document.getElementById("settingsCompany");
+	const companyEl = document.getElementById('settingsCompany');
 	if (config.companyName) {
-		companyEl.textContent = "🏢 " + config.companyName + (config.nip ? "  ·  NIP " + config.nip : "");
-		companyEl.style.display = "block";
+		companyEl.textContent = '🏢 ' + config.companyName + (config.nip ? '  ·  NIP ' + config.nip : '');
+		companyEl.style.display = 'block';
 	} else if (config.nip) {
-		companyEl.textContent = "NIP: " + config.nip;
-		companyEl.style.display = "block";
+		companyEl.textContent = 'NIP: ' + config.nip;
+		companyEl.style.display = 'block';
 	} else {
-		companyEl.style.display = "none";
+		companyEl.style.display = 'none';
 	}
-	document.getElementById("toggleNotifications").checked = !!config.notificationsEnabled;
-	showView("viewSettings");
+	document.getElementById('toggleNotifications').checked = !!config.notificationsEnabled;
+	showView('viewSettings');
 }
 
 async function handleSaveSettings() {
-	config.pollIntervalMinutes = parseInt(document.getElementById("selectInterval").value, 10);
-	config.environment = document.getElementById("selectEnv").value;
-	const rawDays = document.getElementById("selectPendingDays").value;
-	config.pendingDaysThreshold = rawDays === "month" ? "month" : parseInt(rawDays, 10);
-	config.notificationsEnabled = document.getElementById("toggleNotifications").checked;
+	config.pollIntervalMinutes = parseInt(document.getElementById('selectInterval').value, 10);
+	config.environment = document.getElementById('selectEnv').value;
+	const rawDays = document.getElementById('selectPendingDays').value;
+	config.pendingDaysThreshold = rawDays === 'month' ? 'month' : parseInt(rawDays, 10);
+	config.notificationsEnabled = document.getElementById('toggleNotifications').checked;
 
 	await chrome.storage.local.set({ config });
-	await chrome.runtime.sendMessage({ type: "UPDATE_INTERVAL", minutes: config.pollIntervalMinutes });
+	await chrome.runtime.sendMessage({ type: 'UPDATE_INTERVAL', minutes: config.pollIntervalMinutes });
 
-	document.getElementById("envLabel").textContent =
-		{ production: "PRD", demo: "DEMO", test: "TEST" }[config.environment] ?? "PRD";
+	document.getElementById('envLabel').textContent =
+		{ production: 'PRD', demo: 'DEMO', test: 'TEST' }[config.environment] ?? 'PRD';
 
 	await loadState();
 	renderMainView();
-	showView("viewMain");
+	showView('viewMain');
 }
 
 async function handleRemoveToken() {
-	const modal = document.getElementById("confirmModal");
-	const btnOk = document.getElementById("confirmOk");
-	const btnCxl = document.getElementById("confirmCancel");
+	const modal = document.getElementById('confirmModal');
+	const btnOk = document.getElementById('confirmOk');
+	const btnCxl = document.getElementById('confirmCancel');
 
-	modal.style.display = "flex";
+	modal.style.display = 'flex';
 
 	await new Promise((resolve) => {
 		const cleanup = (doIt) => {
-			modal.style.display = "none";
-			btnOk.removeEventListener("click", onOk);
-			btnCxl.removeEventListener("click", onCancel);
-			modal.removeEventListener("click", onOverlay);
-			document.removeEventListener("keydown", onKey);
+			modal.style.display = 'none';
+			btnOk.removeEventListener('click', onOk);
+			btnCxl.removeEventListener('click', onCancel);
+			modal.removeEventListener('click', onOverlay);
+			document.removeEventListener('keydown', onKey);
 			resolve(doIt);
 		};
 		const onOk = () => cleanup(true);
@@ -887,56 +887,56 @@ async function handleRemoveToken() {
 			if (e.target === modal) cleanup(false);
 		};
 		const onKey = (e) => {
-			if (e.key === "Escape") cleanup(false);
+			if (e.key === 'Escape') cleanup(false);
 		};
-		btnOk.addEventListener("click", onOk);
-		btnCxl.addEventListener("click", onCancel);
-		modal.addEventListener("click", onOverlay);
-		document.addEventListener("keydown", onKey);
+		btnOk.addEventListener('click', onOk);
+		btnCxl.addEventListener('click', onCancel);
+		modal.addEventListener('click', onOverlay);
+		document.addEventListener('keydown', onKey);
 	}).then(async (confirmed) => {
 		if (!confirmed) return;
 		await chrome.storage.local.clear();
 		try {
-			await chrome.action.setBadgeText({ text: "" });
+			await chrome.action.setBadgeText({ text: '' });
 		} catch {
 			/* ignore */
 		}
 		config = {};
 		pollState = {};
 		invoiceState = { allSeenIds: [], pendingInvoices: [], recentArchive: [], lastQueryTime: null };
-		showView("viewSetup");
+		showView('viewSetup');
 	});
 }
 
 // ─── Logi ─────────────────────────────────────────────────────────────────────
 
 async function showErrorLogs() {
-	const result = await chrome.storage.local.get("errorLog");
+	const result = await chrome.storage.local.get('errorLog');
 	renderLogsList(result.errorLog ?? []);
-	showView("viewLogs");
+	showView('viewLogs');
 }
 
 function renderLogsList(logs) {
-	const listEl = document.getElementById("logsList");
-	const emptyEl = document.getElementById("logsEmpty");
-	listEl.innerHTML = "";
+	const listEl = document.getElementById('logsList');
+	const emptyEl = document.getElementById('logsEmpty');
+	listEl.innerHTML = '';
 
 	if (logs.length === 0) {
-		listEl.style.display = "none";
-		emptyEl.style.display = "block";
+		listEl.style.display = 'none';
+		emptyEl.style.display = 'block';
 		return;
 	}
 
-	listEl.style.display = "flex";
-	emptyEl.style.display = "none";
+	listEl.style.display = 'flex';
+	emptyEl.style.display = 'none';
 
 	logs.slice(0, 20).forEach((e) => {
-		const entry = document.createElement("div");
-		entry.className = "log-entry error";
+		const entry = document.createElement('div');
+		entry.className = 'log-entry error';
 		entry.innerHTML = `
-      <div class="log-time">${new Date(e.time).toLocaleString("pl-PL")}</div>
-      <div><span class="log-code">${escHtml(e.code ?? "ERR")}</span></div>
-      <div class="log-msg">${escHtml(e.message ?? "")}</div>`;
+      <div class="log-time">${new Date(e.time).toLocaleString('pl-PL')}</div>
+      <div><span class="log-code">${escHtml(e.code ?? 'ERR')}</span></div>
+      <div class="log-msg">${escHtml(e.message ?? '')}</div>`;
 		listEl.appendChild(entry);
 	});
 }
@@ -944,24 +944,24 @@ function renderLogsList(logs) {
 // ─── Error view ───────────────────────────────────────────────────────────────
 
 function showError(title, message) {
-	document.getElementById("errorTitle").textContent = title;
-	document.getElementById("errorMessage").textContent = message;
-	showView("viewError");
+	document.getElementById('errorTitle').textContent = title;
+	document.getElementById('errorMessage').textContent = message;
+	showView('viewError');
 }
 
 // ─── Utils ────────────────────────────────────────────────────────────────────
 
 function trunc(str, max) {
-	if (!str) return "";
-	return str.length <= max ? str : str.substring(0, max - 1) + "…";
+	if (!str) return '';
+	return str.length <= max ? str : str.substring(0, max - 1) + '…';
 }
 
 function escHtml(str) {
-	return String(str ?? "")
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;");
+	return String(str ?? '')
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;');
 }
 
 /**
@@ -969,7 +969,7 @@ function escHtml(str) {
  * Nie istnieją publiczne deep linki do konkretnych faktur w portalu MF.
  */
 function handleOpenInPortal(ksefRef, environment) {
-	const portalUrl = environment === "production" ? "https://ap.ksef.mf.gov.pl" : "https://ap-demo.ksef.mf.gov.pl";
+	const portalUrl = environment === 'production' ? 'https://ap.ksef.mf.gov.pl' : 'https://ap-demo.ksef.mf.gov.pl';
 
 	if (ksefRef) {
 		navigator.clipboard.writeText(ksefRef).catch(() => {});

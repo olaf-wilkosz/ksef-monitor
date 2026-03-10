@@ -20,13 +20,13 @@
 
 export async function deriveKey(pin, salt) {
 	const enc = new TextEncoder();
-	const base = await crypto.subtle.importKey("raw", enc.encode(pin), "PBKDF2", false, ["deriveKey"]);
+	const base = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveKey']);
 	return crypto.subtle.deriveKey(
-		{ name: "PBKDF2", salt, iterations: 200_000, hash: "SHA-256" },
+		{ name: 'PBKDF2', salt, iterations: 200_000, hash: 'SHA-256' },
 		base,
-		{ name: "AES-GCM", length: 256 },
+		{ name: 'AES-GCM', length: 256 },
 		false,
-		["encrypt", "decrypt"],
+		['encrypt', 'decrypt']
 	);
 }
 
@@ -34,7 +34,7 @@ export async function encryptToken(plaintext, pin) {
 	const salt = crypto.getRandomValues(new Uint8Array(16));
 	const iv = crypto.getRandomValues(new Uint8Array(12));
 	const key = await deriveKey(pin, salt);
-	const buf = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plaintext));
+	const buf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(plaintext));
 	return { ciphertext: bufToB64(buf), iv: bufToB64(iv.buffer), salt: bufToB64(salt.buffer) };
 }
 
@@ -42,13 +42,13 @@ export async function decryptToken(stored, pin) {
 	const key = await deriveKey(pin, b64ToBuf(stored.salt));
 	try {
 		const plain = await crypto.subtle.decrypt(
-			{ name: "AES-GCM", iv: b64ToBuf(stored.iv) },
+			{ name: 'AES-GCM', iv: b64ToBuf(stored.iv) },
 			key,
-			b64ToBuf(stored.ciphertext),
+			b64ToBuf(stored.ciphertext)
 		);
 		return new TextDecoder().decode(plain);
 	} catch {
-		throw new Error("INVALID_PIN");
+		throw new Error('INVALID_PIN');
 	}
 }
 
@@ -72,15 +72,15 @@ export async function encryptForKSeF(ksefToken, keyMaterial, timestamp) {
 
 	let publicKey;
 	try {
-		publicKey = await crypto.subtle.importKey("spki", spkiBytes, { name: "RSA-OAEP", hash: "SHA-256" }, false, [
-			"encrypt",
+		publicKey = await crypto.subtle.importKey('spki', spkiBytes, { name: 'RSA-OAEP', hash: 'SHA-256' }, false, [
+			'encrypt',
 		]);
 	} catch (e) {
 		const hex = bufToHex(spkiBytes, 32);
 		throw new Error(`importKey SPKI nieudany: ${e.message} | hex[:32]: ${hex}`);
 	}
 
-	const encrypted = await crypto.subtle.encrypt({ name: "RSA-OAEP" }, publicKey, new TextEncoder().encode(plaintext));
+	const encrypted = await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, publicKey, new TextEncoder().encode(plaintext));
 	return bufToB64(encrypted);
 }
 
@@ -94,12 +94,12 @@ export async function encryptForKSeF(ksefToken, keyMaterial, timestamp) {
 async function resolveToSPKI(material) {
 	let derBytes;
 
-	if (typeof material === "string") {
+	if (typeof material === 'string') {
 		const trimmed = material.trim();
 
-		if (trimmed.startsWith("-----")) {
+		if (trimmed.startsWith('-----')) {
 			// PEM → usuń nagłówki i zdekoduj Base64
-			const b64 = trimmed.replace(/-----[^-]+-----/g, "").replace(/\s/g, "");
+			const b64 = trimmed.replace(/-----[^-]+-----/g, '').replace(/\s/g, '');
 			derBytes = b64ToBuf(b64);
 		} else {
 			// Zakładamy Base64 DER
@@ -110,7 +110,7 @@ async function resolveToSPKI(material) {
 	} else if (ArrayBuffer.isView(material)) {
 		derBytes = material.buffer;
 	} else {
-		throw new Error("Nieznany format klucza publicznego z API KSeF");
+		throw new Error('Nieznany format klucza publicznego z API KSeF');
 	}
 
 	const bytes = new Uint8Array(derBytes);
@@ -190,11 +190,11 @@ function extractSPKIFromCertDER(derBuffer) {
 	const bytes = new Uint8Array(derBuffer);
 
 	// Wejdź do Certificate SEQUENCE
-	if (bytes[0] !== 0x30) throw new Error("DER: oczekiwano SEQUENCE na początku certyfikatu");
+	if (bytes[0] !== 0x30) throw new Error('DER: oczekiwano SEQUENCE na początku certyfikatu');
 	const cert = readTLV(bytes, 0);
 
 	// Wejdź do TBSCertificate SEQUENCE
-	if (bytes[cert.valueStart] !== 0x30) throw new Error("DER: oczekiwano TBSCertificate SEQUENCE");
+	if (bytes[cert.valueStart] !== 0x30) throw new Error('DER: oczekiwano TBSCertificate SEQUENCE');
 	const tbs = readTLV(bytes, cert.valueStart);
 
 	// Przejdź przez pola TBSCertificate aż znajdziemy SPKI
@@ -230,9 +230,7 @@ function extractSPKIFromCertDER(derBuffer) {
 	}
 
 	throw new Error(
-		"Nie można wyodrębnić SPKI z certyfikatu. " +
-			"Pierwsze bajty (hex): " +
-			bufToHex(new Uint8Array(derBuffer), 16),
+		'Nie można wyodrębnić SPKI z certyfikatu. ' + 'Pierwsze bajty (hex): ' + bufToHex(new Uint8Array(derBuffer), 16)
 	);
 }
 
@@ -240,13 +238,13 @@ function extractSPKIFromCertDER(derBuffer) {
 
 export function bufToB64(buffer) {
 	const bytes = new Uint8Array(buffer);
-	let str = "";
+	let str = '';
 	for (const b of bytes) str += String.fromCharCode(b);
 	return btoa(str);
 }
 
 export function b64ToBuf(b64) {
-	const bin = atob(b64.replace(/\s/g, ""));
+	const bin = atob(b64.replace(/\s/g, ''));
 	const buf = new Uint8Array(bin.length);
 	for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
 	return buf.buffer;
@@ -255,6 +253,6 @@ export function b64ToBuf(b64) {
 function bufToHex(bytesOrBuf, limit = 16) {
 	const bytes = bytesOrBuf instanceof Uint8Array ? bytesOrBuf : new Uint8Array(bytesOrBuf);
 	return Array.from(bytes.slice(0, limit))
-		.map((b) => b.toString(16).padStart(2, "0"))
-		.join(" ");
+		.map((b) => b.toString(16).padStart(2, '0'))
+		.join(' ');
 }

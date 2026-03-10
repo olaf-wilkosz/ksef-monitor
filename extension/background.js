@@ -9,8 +9,8 @@
  *  - Badge z licznikiem nieprzejrzanych faktur
  */
 
-import { decryptToken, encryptToken } from "./crypto-utils.js";
-import { KSeFClient, KSeFError, authenticateWithToken } from "./ksef-api.js";
+import { decryptToken, encryptToken } from './crypto-utils.js';
+import { KSeFClient, KSeFError, authenticateWithToken } from './ksef-api.js';
 import {
 	getConfig,
 	saveConfig,
@@ -37,9 +37,9 @@ import {
 	markAllNoticed,
 	dismissFromArchive,
 	undoDismissArchive,
-} from "./storage.js";
+} from './storage.js';
 
-const ALARM_NAME = "ksef-poll";
+const ALARM_NAME = 'ksef-poll';
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 
@@ -79,32 +79,32 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	(async () => {
 		try {
 			switch (message.type) {
-				case "POLL_NOW":
+				case 'POLL_NOW':
 					await runPoll(message.pin);
 					sendResponse({ ok: true });
 					break;
 
-				case "TEST_TOKEN_PLAIN": {
+				case 'TEST_TOKEN_PLAIN': {
 					// Testuje plain token bez szyfrowania – używane w onboardingu przed krokiem PIN
 					try {
 						const { token: plainToken, environment, nip } = message;
 						const auth = await authenticateWithToken(plainToken, nip, environment);
 						// Szybki test – nie zapisujemy authState, nie inicjalizujemy archiwum
-						sendResponse({ ok: true, message: "Token prawidłowy. Możesz ustawić PIN." });
+						sendResponse({ ok: true, message: 'Token prawidłowy. Możesz ustawić PIN.' });
 					} catch (err) {
-						const is450 = err.status === 450 || err.code === "AUTH_FAILED_450";
+						const is450 = err.status === 450 || err.code === 'AUTH_FAILED_450';
 						sendResponse({
 							ok: false,
 							error: is450
-								? "Token unieważniony lub błędny. Wygeneruj nowy token w portalu KSeF."
-								: err.message || "Błąd autoryzacji",
-							code: err.code || (is450 ? "AUTH_FAILED_450" : "AUTH_ERROR"),
+								? 'Token unieważniony lub błędny. Wygeneruj nowy token w portalu KSeF.'
+								: err.message || 'Błąd autoryzacji',
+							code: err.code || (is450 ? 'AUTH_FAILED_450' : 'AUTH_ERROR'),
 						});
 					}
 					break;
 				}
 
-				case "SETUP_TOKEN": {
+				case 'SETUP_TOKEN': {
 					await chrome.alarms.clear(ALARM_NAME);
 					try {
 						const result = await testConnection(message.pin);
@@ -116,7 +116,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					break;
 				}
 
-				case "UPDATE_INTERVAL": {
+				case 'UPDATE_INTERVAL': {
 					const config = await getConfig();
 					config.pollIntervalMinutes = message.minutes;
 					await chrome.storage.local.set({ config });
@@ -126,7 +126,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					break;
 				}
 
-				case "CLEAR_BACKOFF":
+				case 'CLEAR_BACKOFF':
 					await chrome.storage.local.set({
 						pollState: {
 							consecutiveErrors: 0,
@@ -140,11 +140,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					sendResponse({ ok: true });
 					break;
 
-				case "UPDATE_TOKEN": {
+				case 'UPDATE_TOKEN': {
 					// Zaszyfruj nowy token tym samym PIN-em i zapisz
 					const { token: newKsefToken, pin: tokenPin, nip: newNip } = message;
 					if (!newKsefToken || !tokenPin) {
-						sendResponse({ ok: false, error: "Brak tokenu lub PIN-u." });
+						sendResponse({ ok: false, error: 'Brak tokenu lub PIN-u.' });
 						break;
 					}
 					const encrypted = await encryptToken(newKsefToken, tokenPin);
@@ -161,26 +161,26 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					break;
 				}
 
-				case "REINITIALIZE_ARCHIVE": {
+				case 'REINITIALIZE_ARCHIVE': {
 					const { count, pendingCount } = await reinitializeArchive(message.pin ?? null);
 					await setBadge(pendingCount);
 					sendResponse({ ok: true, count });
 					break;
 				}
 
-				case "UNDO_DISMISS_ARCHIVE": {
+				case 'UNDO_DISMISS_ARCHIVE': {
 					await undoDismissArchive(message.invoiceId);
 					sendResponse({ ok: true });
 					break;
 				}
 
-				case "DISMISS_ARCHIVE": {
+				case 'DISMISS_ARCHIVE': {
 					await dismissFromArchive(message.invoiceId);
 					sendResponse({ ok: true });
 					break;
 				}
 
-				case "MARK_NOTICED": {
+				case 'MARK_NOTICED': {
 					const invoice = await markNoticed(message.invoiceId);
 					const inv = await getInvoiceState();
 					await setBadge(inv.pendingInvoices.length);
@@ -188,7 +188,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					break;
 				}
 
-				case "UNDO_NOTICED": {
+				case 'UNDO_NOTICED': {
 					await undoNoticed(message.invoiceId);
 					const inv = await getInvoiceState();
 					await setBadge(inv.pendingInvoices.length);
@@ -196,14 +196,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					break;
 				}
 
-				case "MARK_ALL_NOTICED": {
+				case 'MARK_ALL_NOTICED': {
 					await markAllNoticed();
 					await setBadge(0);
 					sendResponse({ ok: true });
 					break;
 				}
 
-				case "UNDO_MARK_ALL": {
+				case 'UNDO_MARK_ALL': {
 					const invState = await getInvoiceState();
 					const restoredInvoices = message.invoices ?? [];
 					const restoredIds = new Set(restoredInvoices.map((i) => i.id));
@@ -218,15 +218,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				}
 
 				default:
-					sendResponse({ ok: false, error: "Nieznany typ wiadomości" });
+					sendResponse({ ok: false, error: 'Nieznany typ wiadomości' });
 			}
 		} catch (err) {
-			console.error("[KSeF Monitor] Błąd obsługi wiadomości:", err);
+			console.error('[KSeF Monitor] Błąd obsługi wiadomości:', err);
 			sendResponse({
 				ok: false,
-				error: [err.message, err.code ? `[${err.code}]` : "", err.status ? `HTTP ${err.status}` : ""]
+				error: [err.message, err.code ? `[${err.code}]` : '', err.status ? `HTTP ${err.status}` : '']
 					.filter(Boolean)
-					.join(" "),
+					.join(' '),
 				code: err.code,
 				status: err.status,
 			});
@@ -274,10 +274,10 @@ async function runPoll(pin = null) {
 		await recordPollSuccess();
 	} catch (err) {
 		if (err instanceof KSeFError) {
-			if (err.status === 450 || err.code === "AUTH_FAILED_450") {
+			if (err.status === 450 || err.code === 'AUTH_FAILED_450') {
 				await clearAuthState();
-				await recordNeedsNewToken(err.message ?? "Token unieważniony lub błędny.");
-			} else if (err.status === 401 || err.status === 403 || err.code === "AUTH_REQUIRED") {
+				await recordNeedsNewToken(err.message ?? 'Token unieważniony lub błędny.');
+			} else if (err.status === 401 || err.status === 403 || err.code === 'AUTH_REQUIRED') {
 				await clearAuthState();
 				await recordNeedsPin();
 				// Nie nadpisujemy badge czerwonym ! – pokazujemy ostatni znany stan faktur.
@@ -292,10 +292,10 @@ async function runPoll(pin = null) {
 				return;
 			}
 		}
-		await recordPollError(err.code ?? "UNKNOWN", err.message ?? "Nieznany błąd");
+		await recordPollError(err.code ?? 'UNKNOWN', err.message ?? 'Nieznany błąd');
 		const pollState = await getPollState();
 		if (pollState.consecutiveErrors >= 3) {
-			await notifyError("❌ KSeF Monitor: błąd połączenia", err.message?.substring(0, 80) ?? "");
+			await notifyError('❌ KSeF Monitor: błąd połączenia', err.message?.substring(0, 80) ?? '');
 		}
 	}
 }
@@ -343,14 +343,14 @@ async function getOrRefreshAccessToken(config, pin, client, ps) {
 				lastRefreshErr instanceof KSeFError &&
 				(lastRefreshErr.status === 401 || lastRefreshErr.status === 403)
 			) {
-				throw new KSeFError(401, "AUTH_REQUIRED", "Sesja wygasła. Otwórz rozszerzenie i wprowadź PIN.");
+				throw new KSeFError(401, 'AUTH_REQUIRED', 'Sesja wygasła. Otwórz rozszerzenie i wprowadź PIN.');
 			}
 			throw lastRefreshErr;
 		}
 	}
 
 	if (!pin) {
-		throw new KSeFError(401, "AUTH_REQUIRED", "Sesja wygasła. Otwórz rozszerzenie i wprowadź PIN.");
+		throw new KSeFError(401, 'AUTH_REQUIRED', 'Sesja wygasła. Otwórz rozszerzenie i wprowadź PIN.');
 	}
 
 	// Weryfikacja PIN: deszyfrowanie rzuci INVALID_PIN jeśli PIN błędny
@@ -368,7 +368,7 @@ async function getOrRefreshAccessToken(config, pin, client, ps) {
 async function testConnection(pin) {
 	const config = await getConfig();
 	const encrypted = await getEncryptedToken();
-	if (!encrypted) throw new Error("Brak zapisanego tokenu.");
+	if (!encrypted) throw new Error('Brak zapisanego tokenu.');
 
 	const ksefToken = await decryptToken(encrypted, pin);
 	const auth = await authenticateWithToken(ksefToken, config.nip, config.environment);
@@ -408,16 +408,16 @@ async function restoreBadgeFromState() {
 
 async function setBadge(count) {
 	if (count < 0) {
-		await chrome.action.setBadgeText({ text: "!" });
-		await chrome.action.setBadgeBackgroundColor({ color: "#e53935" });
+		await chrome.action.setBadgeText({ text: '!' });
+		await chrome.action.setBadgeBackgroundColor({ color: '#e53935' });
 		return;
 	}
 	if (count === 0) {
-		await chrome.action.setBadgeText({ text: "" });
+		await chrome.action.setBadgeText({ text: '' });
 		return;
 	}
-	await chrome.action.setBadgeText({ text: count > 99 ? "99+" : String(count) });
-	await chrome.action.setBadgeBackgroundColor({ color: "#1565c0" });
+	await chrome.action.setBadgeText({ text: count > 99 ? '99+' : String(count) });
+	await chrome.action.setBadgeBackgroundColor({ color: '#1565c0' });
 }
 
 // ─── Powiadomienia ────────────────────────────────────────────────────────────
@@ -426,17 +426,17 @@ async function maybeNotify(count, invoices) {
 	const config = await getConfig();
 	if (!config.notificationsEnabled) return;
 
-	const noun = count === 1 ? "nowa faktura" : count < 5 ? "nowe faktury" : "nowych faktur";
+	const noun = count === 1 ? 'nowa faktura' : count < 5 ? 'nowe faktury' : 'nowych faktur';
 	const items = invoices.slice(0, 4).map((inv) => ({
 		title: truncate(inv.sellerName, 40),
-		message: inv.invoiceNumber || inv.issueDate?.substring(0, 10) || "",
+		message: inv.invoiceNumber || inv.issueDate?.substring(0, 10) || '',
 	}));
 
-	await chrome.notifications.create("ksef-new-invoices", {
-		type: items.length > 1 ? "list" : "basic",
-		iconUrl: "icons/icon48.png",
+	await chrome.notifications.create('ksef-new-invoices', {
+		type: items.length > 1 ? 'list' : 'basic',
+		iconUrl: 'icons/icon48.png',
 		title: `📄 KSeF: ${count} ${noun}`,
-		message: items[0]?.title ?? "Otwórz rozszerzenie, aby zobaczyć",
+		message: items[0]?.title ?? 'Otwórz rozszerzenie, aby zobaczyć',
 		items: items.length > 1 ? items : undefined,
 		requireInteraction: false,
 	});
@@ -445,19 +445,19 @@ async function maybeNotify(count, invoices) {
 async function maybeNotifyNeedsPin() {
 	const config = await getConfig();
 	if (!config.notificationsEnabled) return;
-	await chrome.notifications.create("ksef-needs-pin", {
-		type: "basic",
-		iconUrl: "icons/icon48.png",
-		title: "🔑 KSeF Monitor: wymagane zalogowanie",
-		message: "Sesja wygasła. Kliknij ikonę rozszerzenia i wprowadź PIN.",
+	await chrome.notifications.create('ksef-needs-pin', {
+		type: 'basic',
+		iconUrl: 'icons/icon48.png',
+		title: '🔑 KSeF Monitor: wymagane zalogowanie',
+		message: 'Sesja wygasła. Kliknij ikonę rozszerzenia i wprowadź PIN.',
 		requireInteraction: true,
 	});
 }
 
 async function notifyError(title, message) {
-	await chrome.notifications.create("ksef-error", {
-		type: "basic",
-		iconUrl: "icons/icon48.png",
+	await chrome.notifications.create('ksef-error', {
+		type: 'basic',
+		iconUrl: 'icons/icon48.png',
 		title,
 		message,
 	});
@@ -482,7 +482,7 @@ async function reinitializeArchive(pin = null) {
 	return { count: result.invoices.length, pendingCount };
 }
 
-const RESTORE_ALARM = "ksef-poll-restore";
+const RESTORE_ALARM = 'ksef-poll-restore';
 
 // RESTORE_ALARM obsługiwany w głównym listenerze onAlarm powyżej
 
@@ -498,6 +498,6 @@ async function rescheduleAlarmAfterBackoff(retryAfterSeconds) {
 }
 
 function truncate(str, max) {
-	if (!str) return "";
-	return str.length <= max ? str : str.substring(0, max - 1) + "…";
+	if (!str) return '';
+	return str.length <= max ? str : str.substring(0, max - 1) + '…';
 }

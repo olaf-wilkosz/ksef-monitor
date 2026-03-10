@@ -17,12 +17,12 @@
  *   8. POST /auth/token/refresh                → odświeżenie accessToken
  */
 
-import { encryptForKSeF } from "./crypto-utils.js";
+import { encryptForKSeF } from './crypto-utils.js';
 
 const BASE_URLS = {
-	production: "https://api.ksef.mf.gov.pl/v2",
-	demo: "https://api-demo.ksef.mf.gov.pl/v2",
-	test: "https://api-test.ksef.mf.gov.pl/v2",
+	production: 'https://api.ksef.mf.gov.pl/v2',
+	demo: 'https://api-demo.ksef.mf.gov.pl/v2',
+	test: 'https://api-test.ksef.mf.gov.pl/v2',
 };
 
 // ── Klasa błędu ───────────────────────────────────────────────────────────────
@@ -30,7 +30,7 @@ const BASE_URLS = {
 export class KSeFError extends Error {
 	constructor(status, code, message, retryAfter = null) {
 		super(message);
-		this.name = "KSeFError";
+		this.name = 'KSeFError';
 		this.status = status;
 		this.code = code;
 		this.retryAfter = retryAfter;
@@ -42,28 +42,28 @@ export class KSeFError extends Error {
 async function apiRequest(baseUrl, path, options = {}) {
 	const url = baseUrl + path;
 	const headers = {
-		"Content-Type": "application/json",
-		Accept: "application/json",
+		'Content-Type': 'application/json',
+		Accept: 'application/json',
 		...(options.headers || {}),
 	};
 
 	let res;
 	try {
 		res = await fetch(url, {
-			method: options.method || "GET",
+			method: options.method || 'GET',
 			headers,
 			body: options.body ? JSON.stringify(options.body) : undefined,
 		});
 	} catch (netErr) {
 		throw new KSeFError(
 			0,
-			"NETWORK_ERROR",
-			"Błąd sieci – sprawdź połączenie i dostępność serwera KSeF. Szczegóły: " + netErr.message,
+			'NETWORK_ERROR',
+			'Błąd sieci – sprawdź połączenie i dostępność serwera KSeF. Szczegóły: ' + netErr.message
 		);
 	}
 
 	if (!res.ok) {
-		const rawText = await res.text().catch(() => "");
+		const rawText = await res.text().catch(() => '');
 		let body = {};
 		try {
 			body = JSON.parse(rawText);
@@ -72,8 +72,8 @@ async function apiRequest(baseUrl, path, options = {}) {
 		}
 
 		if (res.status === 429) {
-			const retryAfter = parseInt(res.headers.get("Retry-After") || "3600", 10);
-			throw new KSeFError(429, "RATE_LIMIT", "Limit zapytań. Retry-After: " + retryAfter + "s", retryAfter);
+			const retryAfter = parseInt(res.headers.get('Retry-After') || '3600', 10);
+			throw new KSeFError(429, 'RATE_LIMIT', 'Limit zapytań. Retry-After: ' + retryAfter + 's', retryAfter);
 		}
 
 		const detail =
@@ -83,9 +83,9 @@ async function apiRequest(baseUrl, path, options = {}) {
 			body.exceptionDetailList?.[0]?.exceptionDescription ||
 			body.error ||
 			rawText.slice(0, 300) ||
-			"Błąd HTTP " + res.status;
+			'Błąd HTTP ' + res.status;
 
-		throw new KSeFError(res.status, body.code || body.exceptionCode || "HTTP_" + res.status, detail);
+		throw new KSeFError(res.status, body.code || body.exceptionCode || 'HTTP_' + res.status, detail);
 	}
 
 	if (res.status === 204) return null;
@@ -95,7 +95,7 @@ async function apiRequest(baseUrl, path, options = {}) {
 // ── Klient KSeF ───────────────────────────────────────────────────────────────
 
 export class KSeFClient {
-	constructor(environment = "production") {
+	constructor(environment = 'production') {
 		this.baseUrl = BASE_URLS[environment] || BASE_URLS.production;
 		this.environment = environment;
 	}
@@ -104,43 +104,43 @@ export class KSeFClient {
 	async getPublicKey() {
 		let data;
 		try {
-			data = await apiRequest(this.baseUrl, "/security/public-key-certificates");
+			data = await apiRequest(this.baseUrl, '/security/public-key-certificates');
 		} catch (err) {
-			if (err.code === "NETWORK_ERROR") {
+			if (err.code === 'NETWORK_ERROR') {
 				throw new KSeFError(
 					0,
-					"NO_KEY",
-					"Nie można połączyć się z API KSeF (" +
+					'NO_KEY',
+					'Nie można połączyć się z API KSeF (' +
 						this.baseUrl +
-						"). " +
-						"Sprawdź środowisko i dostępność serwerów MF.",
+						'). ' +
+						'Sprawdź środowisko i dostępność serwerów MF.'
 				);
 			}
 			throw err;
 		}
 
 		if (!Array.isArray(data) || data.length === 0) {
-			throw new KSeFError(0, "NO_KEY", "Brak certyfikatów w odpowiedzi API.");
+			throw new KSeFError(0, 'NO_KEY', 'Brak certyfikatów w odpowiedzi API.');
 		}
 
-		const cert = data.find((c) => Array.isArray(c.usage) && c.usage.includes("KsefTokenEncryption")) || data[0];
+		const cert = data.find((c) => Array.isArray(c.usage) && c.usage.includes('KsefTokenEncryption')) || data[0];
 
 		if (!cert?.certificate) {
-			throw new KSeFError(0, "NO_KEY", "Brak pola 'certificate' w odpowiedzi.");
+			throw new KSeFError(0, 'NO_KEY', "Brak pola 'certificate' w odpowiedzi.");
 		}
 		return cert.certificate;
 	}
 
 	// 2. Challenge
 	async getChallenge() {
-		return await apiRequest(this.baseUrl, "/auth/challenge", { method: "POST" });
+		return await apiRequest(this.baseUrl, '/auth/challenge', { method: 'POST' });
 	}
 
 	// 5. Polling statusu autoryzacji
 	async waitForAuth(referenceNumber, authToken, maxAttempts = 12) {
 		for (let i = 0; i < maxAttempts; i++) {
-			const data = await apiRequest(this.baseUrl, "/auth/" + referenceNumber, {
-				headers: { Authorization: "Bearer " + authToken },
+			const data = await apiRequest(this.baseUrl, '/auth/' + referenceNumber, {
+				headers: { Authorization: 'Bearer ' + authToken },
 			});
 			const statusCode = data?.status?.code || data?.statusCode || data?.processingCode;
 
@@ -150,19 +150,19 @@ export class KSeFClient {
 			if (statusCode >= 400) {
 				throw new KSeFError(
 					statusCode,
-					"AUTH_FAILED_" + statusCode,
-					"Autoryzacja odrzucona: " + (data?.status?.description || String(statusCode)),
+					'AUTH_FAILED_' + statusCode,
+					'Autoryzacja odrzucona: ' + (data?.status?.description || String(statusCode))
 				);
 			}
 			if (i < maxAttempts - 1) await sleep(3000);
 		}
-		throw new KSeFError(0, "AUTH_TIMEOUT", "Autoryzacja nie ukończyła się w czasie 36s.");
+		throw new KSeFError(0, 'AUTH_TIMEOUT', 'Autoryzacja nie ukończyła się w czasie 36s.');
 	}
 
 	// 6. Odbierz access + refresh token
 	async redeemToken(authToken, waitResult) {
 		const sessionToken = waitResult?.sessionToken?.token || waitResult?.sessionToken || waitResult?.accessToken;
-		if (sessionToken && typeof sessionToken === "string" && sessionToken.startsWith("eyJ")) {
+		if (sessionToken && typeof sessionToken === 'string' && sessionToken.startsWith('eyJ')) {
 			return {
 				accessToken: sessionToken,
 				refreshToken: waitResult?.refreshToken?.token || waitResult?.refreshToken || null,
@@ -171,9 +171,9 @@ export class KSeFClient {
 			};
 		}
 
-		const data = await apiRequest(this.baseUrl, "/auth/token/redeem", {
-			method: "POST",
-			headers: { Authorization: "Bearer " + authToken },
+		const data = await apiRequest(this.baseUrl, '/auth/token/redeem', {
+			method: 'POST',
+			headers: { Authorization: 'Bearer ' + authToken },
 		});
 		const access = data.accessToken?.token || data.accessToken;
 		const refresh = data.refreshToken?.token || data.refreshToken;
@@ -189,8 +189,8 @@ export class KSeFClient {
 
 	// Odświeżenie accessToken
 	async refreshAccessToken(refreshToken) {
-		const data = await apiRequest(this.baseUrl, "/auth/token/refresh", {
-			method: "POST",
+		const data = await apiRequest(this.baseUrl, '/auth/token/refresh', {
+			method: 'POST',
 			body: { refreshToken },
 		});
 		return {
@@ -215,19 +215,19 @@ export class KSeFClient {
 
 		do {
 			const body = {
-				subjectType: "Subject2",
+				subjectType: 'Subject2',
 				dateRange: {
 					from: from.toISOString(),
 					to: now.toISOString(),
-					dateType: "Issue",
+					dateType: 'Issue',
 				},
 				pageSize: 100,
 			};
 			if (continuationToken) body.continuationToken = continuationToken;
 
-			const data = await apiRequest(this.baseUrl, "/invoices/query/metadata", {
-				method: "POST",
-				headers: { Authorization: "Bearer " + accessToken },
+			const data = await apiRequest(this.baseUrl, '/invoices/query/metadata', {
+				method: 'POST',
+				headers: { Authorization: 'Bearer ' + accessToken },
 				body,
 			});
 
@@ -254,10 +254,10 @@ export async function authenticateWithToken(ksefToken, nip, environment) {
 	const tsMs = String(challenge.timestampMs);
 	const encryptedToken = await encryptForKSeF(ksefToken, derB64, tsMs);
 
-	const authResponse = await apiRequest(client.baseUrl, "/auth/ksef-token", {
-		method: "POST",
+	const authResponse = await apiRequest(client.baseUrl, '/auth/ksef-token', {
+		method: 'POST',
 		body: {
-			contextIdentifier: { type: "nip", value: nip },
+			contextIdentifier: { type: 'nip', value: nip },
 			encryptedToken,
 			challenge: challenge.challenge,
 		},
@@ -265,7 +265,7 @@ export async function authenticateWithToken(ksefToken, nip, environment) {
 
 	const authTokenObj = authResponse.authenticationToken || authResponse.authToken;
 	const authToken =
-		authTokenObj && typeof authTokenObj === "object"
+		authTokenObj && typeof authTokenObj === 'object'
 			? authTokenObj.token || authTokenObj.value || String(authTokenObj)
 			: authTokenObj;
 	const refNo = authResponse.referenceNumber;
@@ -282,7 +282,7 @@ function sleep(ms) {
 
 function getJWTExpiry(jwt) {
 	try {
-		const payload = JSON.parse(atob(jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+		const payload = JSON.parse(atob(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
 		return payload.exp ? payload.exp * 1000 : Date.now() + 900_000;
 	} catch {
 		return Date.now() + 900_000;
