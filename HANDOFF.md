@@ -1,7 +1,7 @@
 # KSeF Monitor – Handoff v1.0.0
 
 Chrome extension MV3 monitorująca faktury zakupowe w KSeF API 2.0.
-Lokalizacja plików: `/mnt/user-data/outputs/ksef-watcher/`
+Lokalizacja plików: `/mnt/user-data/outputs/ksef-monitor/`
 
 ---
 

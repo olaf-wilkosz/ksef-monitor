@@ -1,5 +1,5 @@
 /**
- * crypto-utils.js – KSeF Watcher
+ * crypto-utils.js – KSeF Monitor
  *
  * 1. AES-256-GCM  – lokalny storage (klucz z PIN-u przez PBKDF2)
  * 2. RSA-OAEP     – szyfrowanie tokenu kluczem publicznym KSeF (auth API)
