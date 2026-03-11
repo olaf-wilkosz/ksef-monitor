@@ -154,20 +154,28 @@ viewLogs       – log błędów
 
 - Konto: ksef-monitor@pm.me (devconsole)
 - Privacy policy: https://olaf-wilkosz.github.io/ksef-monitor/privacy-policy.html
-- Status (marzec 2026): konto zarejestrowane, weryfikacja tożsamości w toku
+- Status (marzec 2026): **przesłane do recenzji**, publikacja automatyczna po akceptacji
+- Po akceptacji: zaktualizować link w README (podmienić `*(wkrótce)*`)
+- Materiały: `store/listing.md` (opisy PL+EN), `store/screenshots/` (5 screenshotów + 2 banery), `store/store-checklist.md`
 
 ---
 
 ## Backlog
 
-### 🔴 Do zrobienia przed/po publikacji w Store
+### 🔴 Po akceptacji Store
 
-- Badge + stan po restarcie przeglądarki: gołe ikony bez badge po zimnym starcie, czerwony `!` po 1h (PIN_TIMEOUT). Oczekiwane: badge zawsze pokazuje stan z ostatniego pollu, `!` tylko przy rzeczywistym błędzie auth
+- Podmiana `*(wkrótce)*` na prawdziwy link w README
+- Banery promocyjne w README (pliki w `store/screenshots/promo-440x280.png`, `promo-1400x560.png`)
+
+### ✅ Zrobione (v1.0.0)
+
+- Badge po restarcie przeglądarki i po UI-lock: `restoreBadgeFromState()`, `onStartup` listener
+- Progress bar onboarding krok 1: `width:20%` w HTML + `PROGRESS[1]=20` w JS
 
 ### 🟡 Polish
 
-- Niestandardowa nazwa firmy dla JDG
-- Data generowania tokenu z prefiksu `20260304`
+- Niestandardowa nazwa firmy dla JDG (nadpisanie `companyName` w ustawieniach)
+- Data generowania tokenu z prefiksu `20260304` (regex na początku tokenu)
 - Date range picker dla progu "oczekujących"
 
 ### 🟡 Techniczny
@@ -177,7 +185,7 @@ viewLogs       – log błędów
 
 ### 🔴 Post-1.0
 
-- Firefox (browser.\* API, SW lifecycle)
+- Firefox port (Zen Browser jako cel testowy; różnice `browser.*` vs `chrome.*`, SW lifecycle)
 - Multi-firma/NIP
 - Monetyzacja (Ko-fi / GitHub Sponsors)
 
