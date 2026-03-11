@@ -171,11 +171,11 @@ viewLogs       – log błędów
 
 - Badge po restarcie przeglądarki i po UI-lock: `restoreBadgeFromState()`, `onStartup` listener
 - Progress bar onboarding krok 1: `width:20%` w HTML + `PROGRESS[1]=20` w JS
+- Data wygenerowania tokenu w onboardingu: regex `^(\d{4})(\d{2})(\d{2})` z prefiksu tokenu, fade-in `opacity 0.3s`
 
 ### 🟡 Polish
 
 - Niestandardowa nazwa firmy dla JDG (nadpisanie `companyName` w ustawieniach)
-- Data generowania tokenu z prefiksu `20260304` (regex na początku tokenu)
 - Date range picker dla progu "oczekujących"
 
 ### 🟡 Techniczny

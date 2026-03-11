@@ -76,12 +76,22 @@ document.addEventListener('DOMContentLoaded', () => {
 			nipInput.style.background = '#edf2f7';
 			nipInput.style.borderColor = '#b0c8e0';
 			nipError.textContent = '';
+
+			const dateMatch = token.match(/^(\d{4})(\d{2})(\d{2})/);
+			const tokenDateEl = document.getElementById('tokenDate');
+			if (dateMatch) {
+				tokenDateEl.textContent = `Wygenerowano: ${dateMatch[3]}.${dateMatch[2]}.${dateMatch[1]}`;
+				tokenDateEl.style.opacity = '1';
+			}
+
 			if (btn1) btn1.disabled = false;
 			lookupCompanyName(match[1]);
 		} else {
 			pendingConfig.nip = null;
 			pendingConfig.companyName = null;
 			nipInput.value = '';
+			document.getElementById('tokenDate').textContent = '';
+			document.getElementById('tokenDate').style.opacity = '0';
 			nipInput.style.color = '#aaa';
 			nipInput.style.background = 'transparent';
 			nipInput.style.borderColor = 'transparent';
