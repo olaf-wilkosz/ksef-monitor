@@ -108,6 +108,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
 	// inputNip jest readonly – blur listener niepotrzebny
 
+	// Nazwa firmy: edycja przez użytkownika nadpisuje wynik z białej listy
+	document.getElementById('companyBadge').addEventListener('input', function () {
+		pendingConfig.companyName = this.value.trim() || null;
+	});
+
+	// Ołówek odblokowuje edycję nazwy
+	document.getElementById('companyEditHint').addEventListener('click', function () {
+		const el = document.getElementById('companyBadge');
+		if (!el.readOnly) {
+			// ✓ kliknięty – zatwierdź
+			pendingConfig.companyName = el.value.trim() || null;
+			el.readOnly = true;
+			el.style.cursor = 'default';
+			this.textContent = '✏️';
+		} else {
+			// ✏️ kliknięty – odblokuj
+			el.readOnly = false;
+			el.style.cursor = 'text';
+			el.focus();
+			el.select();
+			this.textContent = '✓';
+		}
+	});
+
+	document.getElementById('companyBadge').addEventListener('keydown', function (e) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			pendingConfig.companyName = this.value.trim() || null;
+			this.readOnly = true;
+			this.style.cursor = 'default';
+			const hint = document.getElementById('companyEditHint');
+			if (hint) hint.textContent = '✏️';
+		}
+	});
+
+	document.getElementById('companyBadge').addEventListener('input', function () {
+		if (!this.readOnly) pendingConfig.companyName = this.value.trim() || null;
+	});
+
 	// Krok 1 → 2
 	document.getElementById('btn1Next').addEventListener('click', validateStep1);
 
@@ -173,23 +212,24 @@ async function lookupCompanyName(nip) {
 
 function setCompanyBadge(state) {
 	const el = document.getElementById('companyBadge');
+	const hint = document.getElementById('companyEditHint');
+	const wrap = document.getElementById('companyBadgeWrap');
 	if (!el) return;
 	if (state === 'loading') {
-		el.textContent = '⏳ Sprawdzam...';
-		el.style.color = '#aaa';
-		el.style.borderColor = 'transparent';
-		el.style.background = 'transparent';
-		el.style.fontStyle = 'italic';
+		if (wrap) wrap.style.visibility = 'hidden';
 	} else if (state) {
-		el.textContent = state;
-		el.style.color = '#444';
-		el.style.borderColor = '#dde0ea';
-		el.style.background = '#fafbff';
-		el.style.fontStyle = 'normal';
+		el.value = state;
+		el.readOnly = true;
+		el.style.cursor = 'default';
+		if (hint) hint.textContent = '✏️';
+		if (wrap) wrap.style.visibility = 'visible';
 	} else {
-		el.textContent = '';
-		el.style.borderColor = 'transparent';
-		el.style.background = 'transparent';
+		el.value = '';
+		el.placeholder = 'Nazwa firmy (opcjonalnie)';
+		el.readOnly = false;
+		el.style.cursor = 'text';
+		if (hint) hint.textContent = '✓';
+		if (wrap) wrap.style.visibility = 'visible';
 	}
 }
 

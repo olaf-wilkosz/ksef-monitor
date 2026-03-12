@@ -466,6 +466,35 @@ async function handleUndoNoticed() {
 // ─── Zdarzenia ────────────────────────────────────────────────────────────────
 
 function bindEvents() {
+	// Edycja nazwy firmy w ustawieniach
+	const scHint = document.getElementById('settingsCompanyHint');
+	const scInput = document.getElementById('settingsCompanyInput');
+	if (scHint && scInput) {
+		scHint.addEventListener('click', () => {
+			if (!scInput.readOnly) {
+				// ✓ – zatwierdź
+				saveSettingsCompanyName();
+			} else {
+				// ✏️ – odblokuj
+				scInput.readOnly = false;
+				scInput.style.cursor = 'text';
+				scInput.value = config.companyName ?? '';
+				scInput.focus();
+				scInput.select();
+				scHint.textContent = '✓';
+			}
+		});
+		scInput.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				saveSettingsCompanyName();
+			}
+			if (e.key === 'Escape') {
+				cancelSettingsCompanyEdit();
+			}
+		});
+	}
+
 	document.getElementById('btnOpenOnboarding').addEventListener('click', async () => {
 		const W = 580,
 			H = 680,
@@ -834,11 +863,10 @@ function showSettingsView() {
 	document.getElementById('selectPendingDays').value = String(config.pendingDaysThreshold ?? 'month');
 
 	const companyEl = document.getElementById('settingsCompany');
-	if (config.companyName) {
-		companyEl.textContent = '🏢 ' + config.companyName + (config.nip ? '  ·  NIP ' + config.nip : '');
-		companyEl.style.display = 'block';
-	} else if (config.nip) {
-		companyEl.textContent = 'NIP: ' + config.nip;
+	const companyInput = document.getElementById('settingsCompanyInput');
+	if (config.nip) {
+		const label = '🏢 NIP ' + config.nip + (config.companyName ? '  ·  ' + config.companyName : '');
+		companyInput.value = label;
 		companyEl.style.display = 'block';
 	} else {
 		companyEl.style.display = 'none';
@@ -847,7 +875,38 @@ function showSettingsView() {
 	showView('viewSettings');
 }
 
+async function saveSettingsCompanyName() {
+	const scInput = document.getElementById('settingsCompanyInput');
+	const scHint = document.getElementById('settingsCompanyHint');
+	const newName = scInput.value.trim() || null;
+	config.companyName = newName;
+	await chrome.storage.local.set({ config });
+	scInput.readOnly = true;
+	scInput.style.cursor = 'default';
+	scHint.textContent = '✏️';
+	// odśwież wyświetlany label (z NIP)
+	const label = '🏢 NIP ' + config.nip + (newName ? '  ·  ' + newName : '');
+	scInput.value = label;
+}
+
+function cancelSettingsCompanyEdit() {
+	const scInput = document.getElementById('settingsCompanyInput');
+	const scHint = document.getElementById('settingsCompanyHint');
+	scInput.readOnly = true;
+	scInput.style.cursor = 'default';
+	scHint.textContent = '✏️';
+	const label = '🏢 NIP ' + config.nip + (config.companyName ? '  ·  ' + config.companyName : '');
+	scInput.value = label;
+}
+
 async function handleSaveSettings() {
+	// jeśli nazwa firmy była w trakcie edycji – zapisujemy co jest w polu
+	const scInput = document.getElementById('settingsCompanyInput');
+	if (scInput && !scInput.readOnly) {
+		config.companyName = scInput.value.trim() || null;
+		cancelSettingsCompanyEdit();
+	}
+
 	config.pollIntervalMinutes = parseInt(document.getElementById('selectInterval').value, 10);
 	config.environment = document.getElementById('selectEnv').value;
 	const rawDays = document.getElementById('selectPendingDays').value;

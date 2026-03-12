@@ -1022,19 +1022,42 @@
 		<!-- VIEW: settings -->
 		<div class="view" id="viewSettings">
 			<div class="settings-wrap">
-				<div
-					id="settingsCompany"
-					style="
-						display: none;
-						font-size: 12px;
-						color: #013f71;
-						padding: 7px 10px;
-						background: #edf2f7;
-						border: 1px solid #b0c8e0;
-						border-radius: 7px;
-						margin-bottom: 12px;
-					"
-				></div>
+				<div id="settingsCompany" style="display: none; position: relative; margin-bottom: 12px">
+					<input
+						type="text"
+						id="settingsCompanyInput"
+						readonly
+						style="
+							width: 100%;
+							font-size: 12px;
+							color: #013f71;
+							font-family: inherit;
+							padding: 7px 32px 7px 10px;
+							background: #edf2f7;
+							border: 1px solid #b0c8e0;
+							border-radius: 7px;
+							cursor: default;
+							outline: none;
+							box-sizing: border-box;
+							overflow: hidden;
+							text-overflow: ellipsis;
+							white-space: nowrap;
+						"
+					/>
+					<span
+						id="settingsCompanyHint"
+						style="
+							position: absolute;
+							right: 8px;
+							top: 50%;
+							transform: translateY(-50%);
+							font-size: 12px;
+							cursor: pointer;
+						"
+						title="Edytuj nazwę firmy"
+						>✏️</span
+					>
+				</div>
 
 				<div class="section-title">Polling</div>
 				<div class="setting-row">

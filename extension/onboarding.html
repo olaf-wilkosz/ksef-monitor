@@ -564,26 +564,53 @@
 								"
 							/>
 							<div
-								id="companyBadge"
 								style="
 									flex: 1;
-									font-size: 12px;
-									color: #888;
-									border: 1.5px solid transparent;
-									border-radius: 8px;
-									padding: 9px 13px;
-									overflow: hidden;
-									text-overflow: ellipsis;
-									white-space: nowrap;
-									background: transparent;
-									transition:
-										background 0.2s,
-										border-color 0.2s,
-										color 0.2s;
+									position: relative;
 									display: flex;
 									align-items: center;
+									visibility: hidden;
 								"
-							></div>
+								id="companyBadgeWrap"
+							>
+								<input
+									type="text"
+									id="companyBadge"
+									placeholder="—"
+									readonly
+									style="
+										width: 100%;
+										font-size: 12px;
+										color: #444;
+										font-family: inherit;
+										border: 1.5px solid #dde0ea;
+										border-radius: 8px;
+										padding: 9px 32px 9px 13px;
+										background: #fafbff;
+										transition:
+											background 0.2s,
+											border-color 0.2s,
+											color 0.2s;
+										cursor: default;
+										outline: none;
+										overflow: hidden;
+										text-overflow: ellipsis;
+										white-space: nowrap;
+									"
+								/>
+								<span
+									id="companyEditHint"
+									style="
+										position: absolute;
+										right: 10px;
+										font-size: 12px;
+										cursor: pointer;
+										transition: opacity 0.2s;
+									"
+									title="Edytuj nazwę firmy"
+									>✏️</span
+								>
+							</div>
 						</div>
 						<div class="form-error" id="nipError"></div>
 						<div
