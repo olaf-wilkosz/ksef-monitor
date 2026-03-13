@@ -58,6 +58,7 @@ chrome.runtime.onStartup.addListener(async () => {
 		const config = await getConfig();
 		await createPollAlarm(config.pollIntervalMinutes);
 	}
+	await runPoll();
 });
 
 // ─── Alarm ────────────────────────────────────────────────────────────────────

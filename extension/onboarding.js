@@ -67,25 +67,32 @@ document.addEventListener('DOMContentLoaded', () => {
 		const nipError = document.getElementById('nipError');
 		const token = this.value.trim();
 
-		const match = token.match(/\|nip-(\d{10})\|/);
+		// Pasek postępu – delikatny nudge gdy token wklejony
+		const progressEl = document.getElementById('progress');
+		if (progressEl) {
+			progressEl.style.width = token.length >= 20 ? '30%' : '20%';
+		}
+
+		// Walidacja pełnego formatu tokenu KSeF:
+		// YYYYMMDD-XX-XXXXXXXXXX-XXXXXXXXXX-XX|nip-XXXXXXXXXX|<64 hex>
+		const TOKEN_RE =
+			/^(\d{4})(\d{2})(\d{2})-[A-Z0-9]{2}-[A-F0-9]{10}-[A-F0-9]{10}-[A-Z0-9]{2}\|nip-(\d{10})\|[a-f0-9]{64}$/;
+		const match = token.match(TOKEN_RE);
 		if (match) {
-			pendingConfig.nip = match[1];
+			pendingConfig.nip = match[4];
 			pendingConfig.companyName = null;
-			nipInput.value = match[1];
+			nipInput.value = match[4];
 			nipInput.style.color = '#013f71';
 			nipInput.style.background = '#edf2f7';
 			nipInput.style.borderColor = '#b0c8e0';
 			nipError.textContent = '';
 
-			const dateMatch = token.match(/^(\d{4})(\d{2})(\d{2})/);
 			const tokenDateEl = document.getElementById('tokenDate');
-			if (dateMatch) {
-				tokenDateEl.textContent = `Wygenerowano: ${dateMatch[3]}.${dateMatch[2]}.${dateMatch[1]}`;
-				tokenDateEl.style.opacity = '1';
-			}
+			tokenDateEl.textContent = `Token wygenerowany: ${match[3]}.${match[2]}.${match[1]}`;
+			tokenDateEl.style.opacity = '1';
 
 			if (btn1) btn1.disabled = false;
-			lookupCompanyName(match[1]);
+			lookupCompanyName(match[4]);
 		} else {
 			pendingConfig.nip = null;
 			pendingConfig.companyName = null;
@@ -95,7 +102,10 @@ document.addEventListener('DOMContentLoaded', () => {
 			nipInput.style.color = '#aaa';
 			nipInput.style.background = 'transparent';
 			nipInput.style.borderColor = 'transparent';
-			setCompanyBadge(null);
+			// Chowamy wrapper całkowicie – nie pokazujemy pola nazwy przy złym tokenie
+			const wrap = document.getElementById('companyBadgeWrap');
+			if (wrap) wrap.style.visibility = 'hidden';
+			document.getElementById('companyBadge').value = '';
 			if (token.length >= 20) {
 				nipError.textContent = 'Token nie zawiera NIPu – sprawdź czy token pochodzi z portalu KSeF';
 				if (btn1) btn1.disabled = true;
@@ -164,6 +174,15 @@ document.addEventListener('DOMContentLoaded', () => {
 	// OTP boxes – auto-advance, backspace, cyfry only
 	initOtpBoxes();
 
+	// Toggle powiadomień – aktualizacja wyglądu slidera
+	document.addEventListener('change', (e) => {
+		if (e.target.id === 'toggleNotificationsOnboarding') {
+			const on = e.target.checked;
+			document.getElementById('notifSlider').style.background = on ? '#013f71' : '#ccc';
+			document.getElementById('notifThumb').style.transform = on ? 'translateX(18px)' : '';
+		}
+	});
+
 	// Toggle podglądu PIN
 	document.getElementById('pinToggle').addEventListener('click', () => {
 		const boxes = otpBoxes();
@@ -173,7 +192,16 @@ document.addEventListener('DOMContentLoaded', () => {
 	});
 
 	// Krok 3 → final
-	document.getElementById('btnClose').addEventListener('click', () => window.close());
+	document.getElementById('btnClose').addEventListener('click', async () => {
+		const notifEnabled = document.getElementById('toggleNotificationsOnboarding')?.checked ?? false;
+		if (notifEnabled) {
+			const result = await chrome.storage.local.get('config');
+			const cfg = result.config ?? {};
+			cfg.notificationsEnabled = true;
+			await chrome.storage.local.set({ config: cfg });
+		}
+		window.close();
+	});
 });
 
 // ── Collapsible ───────────────────────────────────────────────────────────────
@@ -240,8 +268,11 @@ function validateStep1() {
 
 	const token = document.getElementById('inputToken').value.trim();
 	document.getElementById('tokenError').textContent = '';
-	if (!token || token.length < 20) {
-		document.getElementById('tokenError').textContent = 'Wklej pełny token KSeF (co najmniej 20 znaków)';
+	const TOKEN_RE =
+		/^(\d{4})(\d{2})(\d{2})-[A-Z0-9]{2}-[A-F0-9]{10}-[A-F0-9]{10}-[A-Z0-9]{2}\|nip-(\d{10})\|[a-f0-9]{64}$/;
+	if (!token || !TOKEN_RE.test(token)) {
+		document.getElementById('tokenError').textContent =
+			'Nieprawidłowy format tokenu – wklej token skopiowany z portalu KSeF';
 		valid = false;
 	} else {
 		pendingConfig.ksefToken = token;

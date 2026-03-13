@@ -174,11 +174,7 @@
 				color: #e53935;
 				font-size: 11px;
 				margin-top: 4px;
-			}
-			textarea.form-input {
-				resize: none;
-				font-size: 12px;
-				line-height: 1.5;
+				min-height: 16px;
 			}
 			select.form-input {
 				cursor: pointer;
@@ -440,7 +436,6 @@
 				font-size: 13px;
 				color: #666;
 				line-height: 1.6;
-				margin-bottom: 18px;
 			}
 			.final-checks {
 				text-align: left;
@@ -470,6 +465,17 @@
 			@keyframes spin {
 				to {
 					transform: rotate(360deg);
+				}
+			}
+			@keyframes pulse-border {
+				0%,
+				100% {
+					border-color: #dde0ea;
+					box-shadow: none;
+				}
+				50% {
+					border-color: #013f71;
+					box-shadow: 0 0 0 3px rgba(1, 63, 113, 0.15);
 				}
 			}
 
@@ -530,12 +536,15 @@
 					<!-- Token -->
 					<div class="form-group">
 						<label class="form-label">Token KSeF</label>
-						<textarea
+						<input
+							type="text"
 							class="form-input"
 							id="inputToken"
-							rows="2"
 							placeholder="Wklej token KSeF..."
-						></textarea>
+							style="font-family: monospace; font-size: 11px; letter-spacing: 0.02em"
+							autocomplete="off"
+							spellcheck="false"
+						/>
 						<div class="form-error" id="tokenError"></div>
 					</div>
 
@@ -846,9 +855,77 @@
 							✅ Alarm co <span id="finalInterval">60</span> min aktywny<br />
 							<span id="finalArchiveLine">✅ Archiwum zainicjalizowane</span>
 						</div>
+
+						<div
+							id="notifToggleWrap"
+							style="
+								margin-top: 16px;
+								padding: 12px 14px;
+								background: #f4f7fb;
+								border: 1.5px solid #dde0ea;
+								border-radius: 10px;
+								display: flex;
+								align-items: center;
+								justify-content: space-between;
+								gap: 12px;
+								animation: pulse-border 1.8s ease-in-out 3;
+							"
+						>
+							<div>
+								<div style="font-size: 13px; font-weight: 600; color: #013f71">
+									🔔 Powiadomienia systemowe
+								</div>
+								<div style="font-size: 11px; color: #888; margin-top: 2px">
+									Powiadamiaj gdy pojawią się nowe faktury lub wygaśnie sesja
+								</div>
+							</div>
+							<label
+								style="
+									position: relative;
+									display: inline-block;
+									width: 40px;
+									height: 22px;
+									flex-shrink: 0;
+									cursor: pointer;
+								"
+							>
+								<input
+									type="checkbox"
+									id="toggleNotificationsOnboarding"
+									style="opacity: 0; width: 0; height: 0; position: absolute"
+								/>
+								<span
+									id="notifSlider"
+									style="
+										position: absolute;
+										inset: 0;
+										border-radius: 22px;
+										background: #ccc;
+										transition: background 0.2s;
+									"
+								>
+									<span
+										id="notifThumb"
+										style="
+											position: absolute;
+											left: 3px;
+											top: 3px;
+											width: 16px;
+											height: 16px;
+											border-radius: 50%;
+											background: white;
+											transition: transform 0.2s;
+											pointer-events: none;
+										"
+									></span>
+								</span>
+							</label>
+						</div>
+
 						<div class="final-sub" style="margin-top: 12px">
-							Rozszerzenie będzie sprawdzać nowe faktury co <span id="finalInterval2">60</span> min i
-							powiadamiać przez badge na ikonie.
+							Rozszerzenie sprawdza nowe faktury co <span id="finalInterval2">60</span> min — liczba
+							pojawi się na ikonie w pasku przeglądarki. Włącz powiadomienia powyżej, by dostawać też
+							systemowe alerty.
 						</div>
 					</div>
 				</div>
