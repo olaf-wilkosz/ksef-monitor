@@ -175,14 +175,15 @@ export class KSeFClient {
 			method: 'POST',
 			headers: { Authorization: 'Bearer ' + authToken },
 		});
+
 		const access = data.accessToken?.token || data.accessToken;
 		const refresh = data.refreshToken?.token || data.refreshToken;
 		return {
 			accessToken: access,
 			refreshToken: refresh,
 			accessTokenExpiry: getJWTExpiry(access),
-			refreshTokenExpiry: data.refreshTokenExpiry
-				? new Date(data.refreshTokenExpiry).getTime()
+			refreshTokenExpiry: data.refreshToken?.validUntil
+				? new Date(data.refreshToken.validUntil).getTime()
 				: Date.now() + 86_400_000,
 		};
 	}
@@ -193,12 +194,13 @@ export class KSeFClient {
 			method: 'POST',
 			body: { refreshToken },
 		});
+
 		return {
 			accessToken: data.accessToken,
 			refreshToken: data.refreshToken || refreshToken,
 			accessTokenExpiry: getJWTExpiry(data.accessToken),
-			refreshTokenExpiry: data.refreshTokenExpiry
-				? new Date(data.refreshTokenExpiry).getTime()
+			refreshTokenExpiry: data.refreshToken?.validUntil
+				? new Date(data.refreshToken.validUntil).getTime()
 				: Date.now() + 86_400_000,
 		};
 	}

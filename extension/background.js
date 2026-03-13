@@ -41,6 +41,27 @@ import {
 
 const ALARM_NAME = 'ksef-poll';
 
+// ─── Session storage – token KSeF w pamięci (czyszczony przy zamknięciu przeglądarki) ──
+
+const SESSION_KEY = 'ksefTokenPlain';
+
+async function getSessionToken() {
+	try {
+		const r = await chrome.storage.session.get(SESSION_KEY);
+		return r[SESSION_KEY] ?? null;
+	} catch {
+		return null;
+	}
+}
+
+async function saveSessionToken(plainToken) {
+	try {
+		await chrome.storage.session.set({ [SESSION_KEY]: plainToken });
+	} catch {
+		/* ignoruj */
+	}
+}
+
 // ─── Start ────────────────────────────────────────────────────────────────────
 
 chrome.alarms.get(ALARM_NAME, async (alarm) => {
@@ -325,6 +346,7 @@ async function getOrRefreshAccessToken(config, pin, client, ps) {
 				try {
 					const newAuth = await client.refreshAccessToken(auth.refreshToken);
 					await saveAuthState(newAuth);
+
 					return newAuth.accessToken;
 				} catch (err) {
 					lastRefreshErr = err;
@@ -348,6 +370,28 @@ async function getOrRefreshAccessToken(config, pin, client, ps) {
 			}
 			throw lastRefreshErr;
 		}
+
+		// Krok 3: refreshToken wygasł – spróbuj token KSeF z session storage (pamięć RAM)
+		// Dostępny tylko gdy przeglądarka była otwarta nieprzerwanie od ostatniego PIN.
+		// Przy zamknięciu przeglądarki session jest czyszczony → krok 4.
+		const sessionToken = await getSessionToken();
+		if (sessionToken) {
+			try {
+				await clearAuthState();
+				const newAuth = await authenticateWithToken(sessionToken, config.nip, config.environment);
+				await saveAuthState(newAuth);
+
+				return newAuth.accessToken;
+			} catch (err) {
+				// Session token nieważny (unieważniony w portalu itp.) → wyczyść i idź do PIN
+
+				await saveSessionToken(null);
+				if (err instanceof KSeFError && (err.status === 401 || err.status === 403 || err.status === 450)) {
+					throw new KSeFError(401, 'AUTH_REQUIRED', 'Sesja wygasła. Otwórz rozszerzenie i wprowadź PIN.');
+				}
+				throw err;
+			}
+		}
 	}
 
 	if (!pin) {
@@ -361,6 +405,9 @@ async function getOrRefreshAccessToken(config, pin, client, ps) {
 	await clearAuthState();
 	const newAuth = await authenticateWithToken(ksefToken, config.nip, config.environment);
 	await saveAuthState(newAuth);
+
+	// Zapisz odszyfrowany token w session storage – umożliwi ciche re-auth po wygaśnięciu refreshToken
+	await saveSessionToken(ksefToken);
 	return newAuth.accessToken;
 }
 
@@ -374,6 +421,7 @@ async function testConnection(pin) {
 	const ksefToken = await decryptToken(encrypted, pin);
 	const auth = await authenticateWithToken(ksefToken, config.nip, config.environment);
 	await saveAuthState(auth);
+	await saveSessionToken(ksefToken);
 
 	const client = new KSeFClient(config.environment);
 	// Pobieramy ostatnie 90 dni na potrzeby inicjalizacji archiwum
