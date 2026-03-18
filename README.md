@@ -4,7 +4,7 @@
 
 Rozszerzenie Chrome, które monitoruje nowe faktury zakupowe w Krajowym Systemie e-Faktur i powiadamia Cię gdy pojawi się coś nowego – bez logowania do portalu.
 
-[![Dostępne w Chrome Web Store](https://storage.googleapis.com/web-dev-uploads/image/WlD8wC6g8khYWPJUsQceQkhXSlv1/iNEddTyWiMfLSwFD6qGq.png)](https://chromewebstore.google.com/detail/ksef-monitor/adfieckbhbajegaomloplmkiimcgamgk)
+[![Dostępne w Chrome Web Store](store/cws-badge.png)](https://chromewebstore.google.com/detail/ksef-monitor/adfieckbhbajegaomloplmkiimcgamgk)
 
 <img src="store/screenshots/promo-1400x560.png" width="900" alt="KSeF Monitor – monitoruj faktury w tle">
 
