@@ -4,7 +4,9 @@
 
 Rozszerzenie Chrome, które monitoruje nowe faktury zakupowe w Krajowym Systemie e-Faktur i powiadamia Cię gdy pojawi się coś nowego – bez logowania do portalu.
 
-<img src="store/screenshots/screenshot-5.png" width="900" alt="Działa z Krajowym Systemem e-Faktur">
+[![Dostępne w Chrome Web Store](https://storage.googleapis.com/web-dev-uploads/image/WlD8wC6g8khYWPJUsQceQkhXSlv1/iNEddTyWiMfLSwFD6qGq.png)](https://chromewebstore.google.com/detail/ksef-monitor/adfieckbhbajegaomloplmkiimcgamgk)
+
+<img src="store/screenshots/promo-1400x560.png" width="900" alt="KSeF Monitor – monitoruj faktury w tle">
 
 ---
 
@@ -15,6 +17,8 @@ Rozszerzenie Chrome, które monitoruje nowe faktury zakupowe w Krajowym Systemie
 - Wyświetla listę nowych faktur z nazwą wystawcy, numerem i kwotą
 - Wysyła powiadomienie push gdy przyjdzie nowa faktura (opcjonalnie)
 - Działa na środowiskach **Produkcja**, **Demo (TR)** i **Test (TE)**
+
+<img src="store/screenshots/screenshot-5.png" width="900" alt="Działa z Krajowym Systemem e-Faktur – KSeF API 2.0">
 
 ---
 
@@ -29,7 +33,7 @@ Rozszerzenie Chrome, które monitoruje nowe faktury zakupowe w Krajowym Systemie
 
 ### Ze sklepu Chrome Web Store
 
-Kliknij **Dodaj do Chrome** na [stronie rozszerzenia](https://chrome.google.com/webstore/detail/ksef-monitor) _(wkrótce)_.
+Kliknij **Dodaj do Chrome** na [stronie rozszerzenia](https://chromewebstore.google.com/detail/ksef-monitor/adfieckbhbajegaomloplmkiimcgamgk).
 
 ### Ręcznie (tryb deweloperski)
 
@@ -60,7 +64,7 @@ Rozszerzenie sprawdza czy token działa i pobiera listę ostatnich faktur jako p
 
 ## Codzienne użycie
 
-<img src="store/screenshots/screenshot-1.png" width="900" alt="Lista faktur w KSeF Monitor">
+<img src="store/screenshots/screenshot-1.png" width="900" alt="Lista faktur w KSeF Monitor"><br>
 
 **Ikona w pasku** pokazuje liczbę faktur wymagających uwagi. Kliknij ją by otworzyć listę.
 
@@ -86,7 +90,7 @@ Po oznaczeniu możesz cofnąć akcję przez **Cofnij** (masz 4 sekundy).
 
 Otwórz rozszerzenie → ikona ⚙️ w prawym górnym rogu.
 
-<img src="store/screenshots/screenshot-2.png" width="900" alt="Konfiguracja KSeF Monitor – token i środowisko">
+<img src="store/screenshots/screenshot-2.png" width="900" alt="Konfiguracja KSeF Monitor – token i środowisko"><br>
 
 | Ustawienie           | Opis                                                      |
 | -------------------- | --------------------------------------------------------- |
@@ -101,7 +105,7 @@ Otwórz rozszerzenie → ikona ⚙️ w prawym górnym rogu.
 
 ## Bezpieczeństwo
 
-<img src="store/screenshots/screenshot-4.png" width="900" alt="Bezpieczeństwo – dane zostają na Twoim komputerze">
+<img src="store/screenshots/screenshot-4.png" width="900" alt="Bezpieczeństwo – dane zostają na Twoim komputerze"><br>
 
 Token KSeF jest **szyfrowany lokalnie** algorytmem AES-256-GCM. Klucz szyfrowania pochodzi z Twojego PIN-u – rozszerzenie nigdy go nie przechowuje. Bez znajomości PIN-u zaszyfrowany token jest bezużyteczny.
 
@@ -112,12 +116,12 @@ Rozszerzenie komunikuje się wyłącznie z `api.ksef.mf.gov.pl` (i odpowiednikam
 ## Często zadawane pytania
 
 **Czy muszę być cały czas zalogowany do portalu KSeF?**
-Nie. Rozszerzenie loguje się samodzielnie używając tokenu i utrzymuje sesję przez ~24 godziny. Po wygaśnięciu poprosi o ponowne wpisanie PIN-u.
+Nie. Rozszerzenie loguje się samodzielnie używając tokenu i utrzymuje sesję w tle – tak długo jak przeglądarka jest otwarta, polling działa bez przerwy. PIN wymagany jest tylko raz przy pierwszym uruchomieniu przeglądarki po jej zamknięciu.
 
 **Dlaczego nie widzę faktur starszych niż X dni?**
 Rozszerzenie pokazuje faktury od momentu instalacji. Starsze dostępne są bezpośrednio w portalu KSeF.
 
-**Zmieniłem PIN w portalu KSeF / wygenerowano nowy token. Co robię?**
+**Zmieniłem token w portalu KSeF. Co robię?**
 Wejdź w ustawienia → _Usuń token_, a następnie przejdź przez konfigurację od nowa z nowym tokenem.
 
 **Co to jest PRD / TR / TE na ikonie?**
