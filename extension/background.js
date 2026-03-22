@@ -385,7 +385,7 @@ async function getOrRefreshAccessToken(config, pin, client, ps) {
 			} catch (err) {
 				// Session token nieważny (unieważniony w portalu itp.) → wyczyść i idź do PIN
 
-				await saveSessionToken(null);
+				await chrome.storage.session.remove(SESSION_KEY);
 				if (err instanceof KSeFError && (err.status === 401 || err.status === 403 || err.status === 450)) {
 					throw new KSeFError(401, 'AUTH_REQUIRED', 'Sesja wygasła. Otwórz rozszerzenie i wprowadź PIN.');
 				}
