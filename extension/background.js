@@ -524,7 +524,8 @@ async function createPollAlarm(intervalMinutes) {
 async function reinitializeArchive(pin = null) {
 	const config = await getConfig();
 	const client = new KSeFClient(config.environment);
-	const token = await getOrRefreshAccessToken(config, pin, client);
+	const ps = await getPollState();
+	const token = await getOrRefreshAccessToken(config, pin, client, ps);
 	const since = new Date(Date.now() - 90 * 24 * 3_600_000);
 	const result = await client.queryInvoiceMetadata(token, since);
 	const pendingCount = await initializeArchive(result.invoices);
