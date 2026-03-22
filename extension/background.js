@@ -436,7 +436,7 @@ async function testConnection(pin) {
 	return {
 		authenticated: true,
 		invoiceCount: pendingCount,
-		message: `Połączono pomyślnie. Faktur z ostatnich 7 dni: ${pendingCount}`,
+		message: `Połączono pomyślnie. Faktur z bieżącego miesiąca: ${pendingCount}`,
 	};
 }
 
