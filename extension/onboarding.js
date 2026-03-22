@@ -73,10 +73,11 @@ document.addEventListener('DOMContentLoaded', () => {
 			progressEl.style.width = token.length >= 20 ? '30%' : '20%';
 		}
 
-		// Walidacja pełnego formatu tokenu KSeF:
-		// YYYYMMDD-XX-XXXXXXXXXX-XXXXXXXXXX-XX|nip-XXXXXXXXXX|<64 hex>
+		// Walidacja formatu tokenu KSeF:
+		// Challenge (YYYYMMDD-XX-XXXXXXXXXX-XXXXXXXXXX-XX) + |nip-XXXXXXXXXX| + ciąg hex
+		// Format Challenge udokumentowany w OpenAPI CIRFMF; długość ciągu hex nie jest oficjalnie określona
 		const TOKEN_RE =
-			/^(\d{4})(\d{2})(\d{2})-[A-Z0-9]{2}-[A-F0-9]{10}-[A-F0-9]{10}-[A-Z0-9]{2}\|nip-(\d{10})\|[a-f0-9]{64}$/;
+			/^(\d{4})(\d{2})(\d{2})-[A-Z0-9]{2}-[A-F0-9]{10}-[A-F0-9]{10}-[A-Z0-9]{2}\|nip-(\d{10})\|[a-f0-9]+$/;
 		const match = token.match(TOKEN_RE);
 		if (match) {
 			pendingConfig.nip = match[4];
@@ -107,7 +108,11 @@ document.addEventListener('DOMContentLoaded', () => {
 			if (wrap) wrap.style.visibility = 'hidden';
 			document.getElementById('companyBadge').value = '';
 			if (token.length >= 20) {
-				nipError.textContent = 'Token nie zawiera NIPu – sprawdź czy token pochodzi z portalu KSeF';
+				if (/\|nip-\d{10}\|/.test(token)) {
+					nipError.textContent = 'Nieprawidłowy format tokenu – sprawdź czy skopiowałeś go w całości';
+				} else {
+					nipError.textContent = 'Token nie zawiera NIPu – sprawdź czy token pochodzi z portalu KSeF';
+				}
 				if (btn1) btn1.disabled = true;
 			} else {
 				nipError.textContent = '';
@@ -116,12 +121,8 @@ document.addEventListener('DOMContentLoaded', () => {
 		}
 	});
 
-	// inputNip jest readonly – blur listener niepotrzebny
-
 	// Nazwa firmy: edycja przez użytkownika nadpisuje wynik z białej listy
-	document.getElementById('companyBadge').addEventListener('input', function () {
-		pendingConfig.companyName = this.value.trim() || null;
-	});
+	// inputNip jest readonly – blur listener niepotrzebny
 
 	// Ołówek odblokowuje edycję nazwy
 	document.getElementById('companyEditHint').addEventListener('click', function () {
@@ -268,21 +269,19 @@ function validateStep1() {
 
 	const token = document.getElementById('inputToken').value.trim();
 	document.getElementById('tokenError').textContent = '';
-	const TOKEN_RE =
-		/^(\d{4})(\d{2})(\d{2})-[A-Z0-9]{2}-[A-F0-9]{10}-[A-F0-9]{10}-[A-Z0-9]{2}\|nip-(\d{10})\|[a-f0-9]{64}$/;
-	if (!token || !TOKEN_RE.test(token)) {
-		document.getElementById('tokenError').textContent =
-			'Nieprawidłowy format tokenu – wklej token skopiowany z portalu KSeF';
+	const TOKEN_RE = /^\d{8}-[A-Z0-9]{2}-[A-F0-9]{10}-[A-F0-9]{10}-[A-Z0-9]{2}\|nip-\d{10}\|[a-f0-9]+$/;
+	const NIP_PRESENT_RE = /\|nip-\d{10}\|/;
+	if (!token) {
+		document.getElementById('tokenError').textContent = 'Wklej token KSeF z portalu podatki.gov.pl';
+		valid = false;
+	} else if (!TOKEN_RE.test(token)) {
+		// Rozróżniamy: token zawiera NIP ale jest urwany/zniekształcony vs. brak NIPu w ogóle
+		document.getElementById('tokenError').textContent = NIP_PRESENT_RE.test(token)
+			? 'Token jest niekompletny – skopiuj go w całości z portalu KSeF'
+			: 'Token nie zawiera NIPu – wklej token wygenerowany w portalu KSeF';
 		valid = false;
 	} else {
 		pendingConfig.ksefToken = token;
-	}
-
-	// NIP jest zawsze wyciągany z tokenu – jeśli brak, token jest nieprawidłowy
-	if (!pendingConfig.nip) {
-		document.getElementById('nipError').textContent =
-			'Token nie zawiera NIPu – wklej token wygenerowany w portalu KSeF';
-		valid = false;
 	}
 
 	pendingConfig.pollIntervalMinutes = parseInt(document.getElementById('inputInterval').value, 10) || 60;
