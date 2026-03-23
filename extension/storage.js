@@ -85,20 +85,27 @@ export async function clearToken() {
 // ─── Auth state ───────────────────────────────────────────────────────────────
 
 export async function getAuthState() {
-	return (
-		(await get(KEYS.AUTH_STATE)) ?? {
-			accessToken: null,
-			accessTokenExpiry: 0,
-			refreshToken: null,
-			refreshTokenExpiry: 0,
-		}
-	);
+	const local = (await get(KEYS.AUTH_STATE)) ?? { refreshToken: null, refreshTokenExpiry: 0 };
+	const session = await chrome.storage.session
+		.get('accessTokenState')
+		.then((r) => r.accessTokenState ?? { accessToken: null, accessTokenExpiry: 0 })
+		.catch(() => ({ accessToken: null, accessTokenExpiry: 0 }));
+	return {
+		accessToken: session.accessToken,
+		accessTokenExpiry: session.accessTokenExpiry,
+		refreshToken: local.refreshToken,
+		refreshTokenExpiry: local.refreshTokenExpiry,
+	};
 }
 export async function saveAuthState(state) {
-	await set(KEYS.AUTH_STATE, state);
+	await set(KEYS.AUTH_STATE, { refreshToken: state.refreshToken, refreshTokenExpiry: state.refreshTokenExpiry });
+	await chrome.storage.session.set({
+		accessTokenState: { accessToken: state.accessToken, accessTokenExpiry: state.accessTokenExpiry },
+	});
 }
 export async function clearAuthState() {
 	await remove(KEYS.AUTH_STATE);
+	await chrome.storage.session.remove('accessTokenState').catch(() => {});
 }
 
 // ─── Poll state ───────────────────────────────────────────────────────────────
