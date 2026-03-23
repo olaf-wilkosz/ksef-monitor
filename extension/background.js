@@ -352,8 +352,7 @@ async function getOrRefreshAccessToken(config, pin, client, ps) {
 					lastRefreshErr = err;
 					const retriable =
 						!(err instanceof KSeFError) || // błąd sieci
-						(err instanceof KSeFError && err.status >= 500) || // błąd serwera KSeF
-						(err instanceof KSeFError && (err.status === 401 || err.status === 403)); // auth – też retry
+						(err instanceof KSeFError && err.status >= 500); // błąd serwera KSeF
 					if (retriable && attempt < REFRESH_RETRIES) {
 						await new Promise((r) => setTimeout(r, REFRESH_DELAY_MS));
 						continue;
