@@ -162,6 +162,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					sendResponse({ ok: true });
 					break;
 
+				case 'VERIFY_PIN': {
+					// Weryfikacja PIN przez próbę deszyfrowania – używana przy UI-lock
+					// żeby nie przepuścić dowolnego PIN-u gdy refresh token jest ważny
+					try {
+						const encrypted = await getEncryptedToken();
+						if (!encrypted) {
+							sendResponse({ ok: false, error: 'Brak tokenu' });
+							break;
+						}
+						await decryptToken(encrypted, message.pin);
+						sendResponse({ ok: true });
+					} catch {
+						sendResponse({ ok: false, error: 'INVALID_PIN' });
+					}
+					break;
+				}
+
 				case 'UPDATE_TOKEN': {
 					// Zaszyfruj nowy token tym samym PIN-em i zapisz
 					const { token: newKsefToken, pin: tokenPin, nip: newNip } = message;

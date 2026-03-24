@@ -602,6 +602,57 @@ function bindEvents() {
 
 // ── OTP PIN helpers ───────────────────────────────────────────────────────────
 
+function setPinError(errEl, msg) {
+	if (!errEl) return;
+	if (msg) {
+		errEl.textContent = msg;
+		const controls = document.querySelector('.pin-controls');
+		if (controls && !controls.contains(errEl)) {
+			const btnRow = controls.querySelector('.btn-row');
+			controls.insertBefore(errEl, btnRow);
+		}
+		requestAnimationFrame(() => errEl.classList.add('visible'));
+	} else {
+		errEl.classList.remove('visible');
+		setTimeout(() => {
+			if (errEl && !errEl.classList.contains('visible') && errEl.parentNode) {
+				const parking = document.getElementById('pinErrorParking');
+				if (parking) parking.appendChild(errEl);
+				errEl.textContent = '';
+			}
+		}, 200);
+	}
+}
+
+function clearPinBoxes(ids) {
+	ids.forEach((id, i) => {
+		const b = document.getElementById(id);
+		if (b) {
+			b.value = '';
+			b.classList.remove('filled');
+		}
+	});
+	const first = document.getElementById(ids[0]);
+	if (first) first.focus();
+}
+
+let _lockoutTimer = null;
+function showLockoutCountdown(errEl, lockedUntil) {
+	if (_lockoutTimer) clearInterval(_lockoutTimer);
+	const update = () => {
+		const secs = Math.ceil((lockedUntil - Date.now()) / 1000);
+		if (secs <= 0) {
+			clearInterval(_lockoutTimer);
+			_lockoutTimer = null;
+			setPinError(errEl, '');
+			return;
+		}
+		setPinError(errEl, `Zbyt wiele błędnych prób. Poczekaj ${secs}s.`);
+	};
+	update();
+	_lockoutTimer = setInterval(update, 1000);
+}
+
 function getOtpValue(ids) {
 	return ids.map((id) => document.getElementById(id)?.value ?? '').join('');
 }
@@ -667,21 +718,62 @@ async function handlePinConfirm() {
 	const pin = getOtpValue(['pinBox0', 'pinBox1', 'pinBox2', 'pinBox3']);
 	const errEl = document.getElementById('pinError');
 	if (pin.length < 4) {
-		errEl.textContent = 'Wpisz 4-cyfrowy PIN.';
-		errEl.style.display = 'block';
+		setPinError(errEl, 'Wpisz 4-cyfrowy PIN.');
+		return;
+	}
+
+	// Sprawdź lockout
+	const PIN_MAX_ATTEMPTS = 5;
+	const PIN_LOCKOUT_MS = 30_000;
+	const lockoutData = await chrome.storage.local.get('pinLockout');
+	let lockout = lockoutData.pinLockout ?? { attempts: 0, lockedUntil: null };
+
+	// Reset attempts gdy lockout już minął
+	if (lockout.lockedUntil && Date.now() >= lockout.lockedUntil) {
+		lockout = { attempts: 0, lockedUntil: null };
+		await chrome.storage.local.remove('pinLockout');
+	}
+
+	if (lockout.lockedUntil && Date.now() < lockout.lockedUntil) {
+		showLockoutCountdown(errEl, lockout.lockedUntil);
 		return;
 	}
 
 	const btn = document.getElementById('btnPinConfirm');
 	btn.disabled = true;
 	btn.innerHTML = `<div class="spinner"></div> Autoryzuję...`;
-	errEl.style.display = 'none';
+	setPinError(errEl, '');
 
 	try {
 		await chrome.runtime.sendMessage({ type: 'CLEAR_BACKOFF' });
+
+		// Przy UI-lock (needsPin=false) background akceptuje dowolny PIN przez refresh token.
+		// Weryfikujemy kryptograficznie przed wysłaniem żeby lockout działał poprawnie.
+		const psData = await chrome.storage.local.get('pollState');
+		const needsPin = psData.pollState?.needsPin ?? false;
+		if (!needsPin) {
+			const verifyResponse = await chrome.runtime.sendMessage({ type: 'VERIFY_PIN', pin });
+			if (!verifyResponse.ok) {
+				const attempts = (lockout.attempts ?? 0) + 1;
+				const lockedUntil = attempts >= PIN_MAX_ATTEMPTS ? Date.now() + PIN_LOCKOUT_MS : null;
+				await chrome.storage.local.set({ pinLockout: { attempts, lockedUntil } });
+				const remaining = PIN_MAX_ATTEMPTS - attempts;
+				if (lockedUntil) {
+					showLockoutCountdown(errEl, lockedUntil);
+				} else {
+					setPinError(errEl, `Nieprawidłowy PIN. Pozostało prób: ${remaining}.`);
+				}
+				clearPinBoxes(['pinBox0', 'pinBox1', 'pinBox2', 'pinBox3']);
+				btn.disabled = false;
+				btn.textContent = 'Zaloguj ponownie';
+				return;
+			}
+		}
+
 		const response = await chrome.runtime.sendMessage({ type: 'POLL_NOW', pin });
 
 		if (response.ok) {
+			await chrome.storage.local.remove('pinLockout');
 			['pinBox0', 'pinBox1', 'pinBox2', 'pinBox3'].forEach((id) => {
 				const b = document.getElementById(id);
 				if (b) {
@@ -691,8 +783,6 @@ async function handlePinConfirm() {
 			});
 			await loadState();
 			renderMainView();
-			// Przejdź przez determineAndShowView – sprawdza needsPin z storage
-			// zamiast bezpośrednio do viewMain (nie ufamy lokalnej zmiennej)
 			determineAndShowView();
 		} else {
 			const err = response.error ?? '';
@@ -701,12 +791,24 @@ async function handlePinConfirm() {
 				err.toLowerCase().includes('pin') ||
 				err.toLowerCase().includes('invalid') ||
 				err.toLowerCase().includes('decrypt');
-			errEl.textContent = isInvalidPin ? 'Nieprawidłowy PIN. Spróbuj ponownie.' : `Błąd: ${err}`;
-			errEl.style.display = 'block';
+
+			if (isInvalidPin) {
+				const attempts = (lockout.attempts ?? 0) + 1;
+				const lockedUntil = attempts >= PIN_MAX_ATTEMPTS ? Date.now() + PIN_LOCKOUT_MS : null;
+				await chrome.storage.local.set({ pinLockout: { attempts, lockedUntil } });
+				const remaining = PIN_MAX_ATTEMPTS - attempts;
+				if (lockedUntil) {
+					showLockoutCountdown(errEl, lockedUntil);
+				} else {
+					setPinError(errEl, `Nieprawidłowy PIN. Pozostało prób: ${remaining}.`);
+				}
+				clearPinBoxes(['pinBox0', 'pinBox1', 'pinBox2', 'pinBox3']);
+			} else {
+				setPinError(errEl, `Błąd: ${err}`);
+			}
 		}
 	} catch (err) {
-		errEl.textContent = 'Błąd połączenia: ' + err.message;
-		errEl.style.display = 'block';
+		setPinError(errEl, 'Błąd połączenia: ' + err.message);
 	} finally {
 		btn.disabled = false;
 		btn.textContent = 'Zaloguj ponownie';
@@ -725,16 +827,16 @@ async function handleNewTokenConfirm() {
 	const pin = getOtpValue(['newTokenPinBox0', 'newTokenPinBox1', 'newTokenPinBox2', 'newTokenPinBox3']);
 	const errEl = document.getElementById('newTokenError');
 	const btn = document.getElementById('btnNewTokenConfirm');
-	errEl.style.display = 'none';
+	errEl.textContent = '';
 
 	if (!token || token.length < 20) {
 		errEl.textContent = 'Token jest za krótki – wklej pełny token z portalu KSeF.';
-		errEl.style.display = 'block';
+
 		return;
 	}
 	if (pin.length < 4) {
 		errEl.textContent = 'Wprowadź 4-cyfrowy PIN.';
-		errEl.style.display = 'block';
+
 		return;
 	}
 
@@ -767,15 +869,12 @@ async function handleNewTokenConfirm() {
 				determineAndShowView();
 			} else {
 				errEl.textContent = `Token zapisany, ale połączenie nieudane: ${pollResp.error}`;
-				errEl.style.display = 'block';
 			}
 		} else {
 			errEl.textContent = response.error ?? 'Nie udało się zapisać tokenu.';
-			errEl.style.display = 'block';
 		}
 	} catch (err) {
 		errEl.textContent = 'Błąd: ' + err.message;
-		errEl.style.display = 'block';
 	} finally {
 		btn.disabled = false;
 		btn.textContent = 'Zapisz nowy token';
@@ -820,7 +919,7 @@ async function handleReinitArchive() {
 	const errEl = document.getElementById('reinitError');
 	btn.disabled = true;
 	btn.textContent = '⏳ Pobieranie...';
-	errEl.style.display = 'none';
+	errEl.textContent = '';
 
 	try {
 		const response = await chrome.runtime.sendMessage({ type: 'REINITIALIZE_ARCHIVE' });
@@ -832,7 +931,6 @@ async function handleReinitArchive() {
 			showInfoToast(`✓ Pobrano ${response.count ?? 0} faktur`);
 		} else if (response.status === 401 || response.error?.includes('PIN') || response.error?.includes('Sesja')) {
 			errEl.textContent = 'Sesja wygasła. Wróć i użyj \u201eSprawdź teraz\u201d żeby ponownie się zalogować.';
-			errEl.style.display = 'block';
 		} else if (
 			response.status === 429 ||
 			response.error?.includes('RATE_LIMIT') ||
@@ -841,14 +939,11 @@ async function handleReinitArchive() {
 			const match = response.error?.match(/(\d+)s/);
 			const wait = match ? `Odczekaj ${Math.ceil(match[1] / 60)} min.` : 'Odczekaj chwilę.';
 			errEl.textContent = `Limit zapytań KSeF (HTTP 429). ${wait}`;
-			errEl.style.display = 'block';
 		} else {
 			errEl.textContent = response.error ?? 'Nieznany błąd';
-			errEl.style.display = 'block';
 		}
 	} catch (err) {
 		errEl.textContent = 'Błąd połączenia: ' + err.message;
-		errEl.style.display = 'block';
 	} finally {
 		btn.disabled = false;
 		btn.textContent = '🔄 Odśwież archiwum faktur';

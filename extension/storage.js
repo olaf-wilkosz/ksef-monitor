@@ -16,6 +16,7 @@ const KEYS = {
 	INVOICE_STATE: 'invoiceState',
 	ERROR_LOG: 'errorLog',
 	ARCHIVE_UNDO_BUFFER: 'archiveUndoBuffer',
+	PIN_LOCKOUT: 'pinLockout',
 };
 
 const ARCHIVE_MAX = 5;
@@ -437,6 +438,27 @@ async function appendErrorLog(entry) {
 }
 export async function getErrorLog() {
 	return (await get(KEYS.ERROR_LOG)) ?? [];
+}
+
+// ─── PIN lockout ───────────────────────────────────────────────────────────────
+
+const PIN_MAX_ATTEMPTS = 5;
+const PIN_LOCKOUT_MS = 30_000; // 30 sekund
+
+export async function getPinLockout() {
+	return (await get(KEYS.PIN_LOCKOUT)) ?? { attempts: 0, lockedUntil: null };
+}
+
+export async function recordPinFailure() {
+	const state = await getPinLockout();
+	const attempts = state.attempts + 1;
+	const lockedUntil = attempts >= PIN_MAX_ATTEMPTS ? Date.now() + PIN_LOCKOUT_MS : null;
+	await set(KEYS.PIN_LOCKOUT, { attempts, lockedUntil });
+	return { attempts, lockedUntil };
+}
+
+export async function clearPinLockout() {
+	await remove(KEYS.PIN_LOCKOUT);
 }
 
 export async function clearAll() {
