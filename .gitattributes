@@ -1,0 +1,8 @@
+# Normalizuj wszystkie pliki tekstowe do LF
+* text=auto eol=lf
+
+# Pliki binarne – bez konwersji
+*.png binary
+*.jpg binary
+*.ico binary
+*.svg binary
