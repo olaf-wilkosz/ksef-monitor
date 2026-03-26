@@ -317,7 +317,6 @@ async function runPoll(pin = null) {
 				await clearAuthState();
 				await recordNeedsNewToken(err.message ?? 'Token unieważniony lub błędny.');
 			} else if (err.status === 401 || err.status === 403 || err.code === 'AUTH_REQUIRED') {
-				await clearAuthState();
 				await recordNeedsPin();
 				// Nie nadpisujemy badge czerwonym ! – pokazujemy ostatni znany stan faktur.
 				// Użytkownik zobaczy prośbę o PIN dopiero gdy otworzy popup.
