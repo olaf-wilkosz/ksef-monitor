@@ -101,10 +101,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 	(async () => {
 		try {
 			switch (message.type) {
-				case 'POLL_NOW':
+				case 'POLL_NOW': {
 					await runPoll(message.pin);
-					sendResponse({ ok: true });
+					const psAfter = await getPollState();
+					sendResponse({ ok: !psAfter.needsPin && !psAfter.needsNewToken });
 					break;
+				}
 
 				case 'TEST_TOKEN_PLAIN': {
 					// Testuje plain token bez szyfrowania – używane w onboardingu przed krokiem PIN
@@ -342,7 +344,7 @@ async function runPoll(pin = null) {
 
 async function getOrRefreshAccessToken(config, pin, client, ps) {
 	const auth = await getAuthState();
-	const pinRequired = ps.needsPin; // ps przekazany z runPoll – bez podwójnego odczytu
+	const pinRequired = ps.needsPin;
 
 	// Jeśli użytkownik podał PIN (tzn. ekran viewPin), zawsze weryfikuj go przez
 	// deszyfrowanie – nie używaj cache'owanego tokenu. Inaczej dowolny PIN przejdzie.
