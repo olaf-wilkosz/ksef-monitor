@@ -109,10 +109,10 @@ function determineAndShowView() {
 			return;
 		}
 
-		const validJWT = auth.accessToken && auth.accessTokenExpiry > Date.now() + 30_000;
+		// accessToken jest w session storage (od v1.0.2) – sprawdzamy tylko refreshToken w local
 		const validRefresh = auth.refreshToken && auth.refreshTokenExpiry > Date.now() + 30_000;
 
-		if (!validJWT && !validRefresh) {
+		if (!validRefresh && !lastSuccess) {
 			showView('viewPin');
 			return;
 		}
@@ -745,8 +745,6 @@ async function handlePinConfirm() {
 	setPinError(errEl, '');
 
 	try {
-		await chrome.runtime.sendMessage({ type: 'CLEAR_BACKOFF' });
-
 		// Przy UI-lock (needsPin=false) background akceptuje dowolny PIN przez refresh token.
 		// Weryfikujemy kryptograficznie przed wysłaniem żeby lockout działał poprawnie.
 		const psData = await chrome.storage.local.get('pollState');
