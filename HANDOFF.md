@@ -23,7 +23,7 @@ ksef-monitor/
 │   ├── cws-badge.png   (oficjalny badge Chrome Web Store z obramowaniem)
 │   └── screenshots/    (slide-1..5.html + screenshot-1..5.png + promo-440x280 + promo-1400x560)
 ├── docs/               ← GitHub Pages
-│   └── privacy-policy.html   https://olaf-wilkosz.github.io/ksef-monitor/privacy-policy.html
+│   └── privacy-policy.html
 ├── .gitattributes      ← LF normalizacja
 ├── README.md
 ├── HANDOFF.md
@@ -44,7 +44,7 @@ zip -r ../ksef-monitor-1.0.2.zip . --exclude="*.DS_Store"
 | Plik              | Opis                                                        |
 | ----------------- | ----------------------------------------------------------- |
 | `background.js`   | Service Worker: polling, alarmy, obsługa wiadomości z popup |
-| `storage.js`      | Warstwa danych: cały dostęp do chrome.storage.local         |
+| `storage.js`      | Warstwa danych: chrome.storage.local + session              |
 | `popup.js`        | Logika UI popup                                             |
 | `popup.html`      | Widoki popup + CSS                                          |
 | `onboarding.js`   | Kreator pierwszego uruchomienia (ES module)                 |
@@ -52,6 +52,8 @@ zip -r ../ksef-monitor-1.0.2.zip . --exclude="*.DS_Store"
 | `ksef-api.js`     | Klient KSeF API 2.0 (auth + query)                          |
 | `crypto-utils.js` | AES-256-GCM, RSA-OAEP, PBKDF2 (ES module)                   |
 | `manifest.json`   | MV3, permissions, ikony, version                            |
+
+Uwaga: `onboarding.html` używa `type="module"` i importuje `encryptToken` bezpośrednio z `crypto-utils.js`.
 
 ---
 
@@ -68,16 +70,19 @@ zip -r ../ksef-monitor-1.0.2.zip . --exclude="*.DS_Store"
     3. RSA-OAEP encrypt(`"token|timestampMs"`) → base64
     4. `POST /auth/ksef-token` → `{referenceNumber}`
     5. Polling `GET /auth/{refNo}` aż status = AUTHORISED
-    6. `POST /auth/token/redeem` → `{accessToken, refreshToken, ...}`
+    6. `POST /auth/token/redeem` → `{accessToken: {token, validUntil}, refreshToken: {token, validUntil}, ...}`
+- Refresh: `POST /auth/token/refresh`
+    - refreshToken przekazywany w nagłówku `Authorization: Bearer <token>` (nie w body!)
+    - Odpowiedź: `{accessToken: {token, validUntil}}` – **brak nowego refreshToken, zostaje ten sam**
 - Faktury: `POST /invoices/query/metadata`
 - Kluczowe pola faktury: `ksefNumber`, `invoiceNumber`, `issueDate`, `seller.name`, `seller.nip`, `grossAmount`, `currency`
 
 ### Czasy życia tokenów (zweryfikowane na produkcji)
 
-- `accessToken` → ~15 minut (exp z JWT)
+- `accessToken` → ~15 minut (pole `validUntil` w odpowiedzi, nie tylko `exp` z JWT)
 - `refreshToken` → **7 dni** (pole `refreshToken.validUntil` w odpowiedzi `redeemToken`)
-- `refreshToken` przy `/auth/token/refresh` → format odpowiedzi niezbadany, fallback 24h (patrz backlog)
-- Token KSeF (długoterminowy) → ważny do ręcznego unieważnienia, możliwość generowania wygasa 31.12.2026
+- `refreshToken` przy `/auth/token/refresh` → nie jest odnawiany, zostaje ten sam przez całe 7 dni
+- Token KSeF (długoterminowy) → ważny do ręcznego unieważnienia w portalu, możliwość generowania wygasa 31.12.2026
 
 ### Storage schema
 
@@ -88,14 +93,14 @@ config: {
   companyName:          string | null,
   environment:          "production" | "demo" | "test",
   pollIntervalMinutes:  number,
-  pendingDaysThreshold: "month" | number,  // UI: month | 7 | 14 | 30
+  pendingDaysThreshold: "month" | number,  // UI oferuje: month | 7 | 14 | 30
   notificationsEnabled: boolean,
 }
 
 encryptedToken: { ciphertext: string, iv: string, salt: string }
 
 authState: {
-  // accessToken przeniesiony do session storage (v1.0.2)
+  // accessToken przeniesiony do session storage (v1.0.2) – nie leży na dysku
   refreshToken:        string | null,
   refreshTokenExpiry:  number,   // ms timestamp
 }
@@ -105,8 +110,8 @@ pollState: {
   lastSuccessTime:   string | null,
   consecutiveErrors: number,
   backoffUntil:      string | null,
-  needsPin:          boolean,
-  needsNewToken:     boolean,
+  needsPin:          boolean,      // crypto-lock: refresh token wygasł lub brak session po restarcie
+  needsNewToken:     boolean,      // HTTP 450: token unieważniony
   lastError:         string | null,
 }
 
@@ -129,7 +134,7 @@ errorLog: Array<{ time: string, code: string, message: string }>  // maks. 50
 ```js
 // chrome.storage.session (RAM, czyszczony przy zamknięciu przeglądarki)
 {
-  ksefTokenPlain:   string,
+  ksefTokenPlain:   string,                                       // odszyfrowany token KSeF
   accessTokenState: { accessToken: string, accessTokenExpiry: number }
 }
 ```
@@ -143,30 +148,34 @@ errorLog: Array<{ time: string, code: string, message: string }>  // maks. 50
 }
 ```
 
+### Hierarchia auth (getOrRefreshAccessToken)
+
+1. `accessToken` z session storage (~15 min)
+2. `refreshToken` z local storage → `POST /auth/token/refresh` z Bearer header (ważny 7 dni)
+3. `ksefTokenPlain` z session storage → pełna re-auth bez PIN (dostępny gdy przeglądarka otwarta)
+4. `needsPin=true` → polling staje, badge `!`
+
 ### Kluczowe decyzje projektowe
 
-- **Hierarchia auth** (`getOrRefreshAccessToken`):
-    1. `accessToken` z session storage (~15 min)
-    2. `refreshToken` z local storage → silent refresh (7 dni)
-    3. `ksefTokenPlain` z session storage → pełna re-auth bez PIN
-    4. `needsPin=true` → polling staje, badge `!`
-- **UI-lock (4h)** → od v1.0.2 weryfikuje PIN kryptograficznie przez `VERIFY_PIN`; wcześniej dowolny PIN przechodził gdy refresh token był ważny
+- **UI-lock (4h)** → popup wymaga PIN po 4h braku aktywności; weryfikuje kryptograficznie przez `VERIFY_PIN` w background (od v1.0.2 – wcześniej dowolny PIN przechodził gdy refresh token był ważny)
 - **PIN lockout** → 5 błędnych prób → 30s blokada z odliczaniem; reset po sukcesie lub wygaśnięciu
+- **`clearAuthState` NIE jest wywoływane przy AUTH_REQUIRED** → refreshToken musi przeżyć błędne próby PIN i restart przeglądarki; czyścimy tylko przy HTTP 450 i świadomej zmianie tokenu
+- **`CLEAR_BACKOFF` NIE jest wysyłane przed `POLL_NOW`** przy crypto-lock → kasowałoby `needsPin` zanim poll dostanie szansę użyć PINu przez właściwą ścieżkę
+- **`POLL_NOW` zwraca realny status** → `{ok: !needsPin && !needsNewToken}` po pollu, nie zawsze `ok: true`
 - **needsNewToken=true** → HTTP 450, token unieważniony, viewNewToken
-- **Retry przy refresh** → tylko błędy sieci i 5xx; 401/403 jest finalne (od v1.0.2)
-- **Rate limit 429** → backoff + RESTORE_ALARM
-- **NIP** → zawsze wyciągany z tokenu, pole readonly
-- **Walidacja tokenu** → regex oparty na jednej próbce JDG; format dla spółek nieznany
-- **refreshTokenExpiry** → czytamy `data.refreshToken.validUntil`; przy refresh endpoint fallback 24h
-- **onboarding jako popup window** → `chrome.windows.create`, prawy górny róg
-- **Kolory** → `#dc0032` czerwień, `#013f71` granat
+- **Retry przy refresh** → tylko błędy sieci i 5xx; 401/403 jest finalne (nie retryujemy)
+- **Rate limit 429** → backoff + RESTORE_ALARM (nie setTimeout – SW może zasnąć)
+- **NIP** → zawsze wyciągany z tokenu (`|nip-XXXXXXXXXX|`), pole readonly
+- **Walidacja tokenu** → regex oparty na jednej próbce JDG; format dla spółek/pieczęci nieznany
+- **onboarding jako popup window** → `chrome.windows.create`, prawy górny róg okna przeglądarki
+- **Kolory KSeF** → `#dc0032` czerwień, `#013f71` granat
 
 ### Widoki popup
 
 ```
-viewSetup      – brak tokenu
+viewSetup      – brak tokenu (pierwszy raz lub po clearAll)
 viewPin        – PIN (needsPin=true lub UI-lock 4h)
-viewNewToken   – nowy token (HTTP 450)
+viewNewToken   – nowy token (HTTP 450: token unieważniony)
 viewMain       – lista faktur
 viewSettings   – konfiguracja
 viewError      – błąd krytyczny (PRD)
@@ -180,32 +189,31 @@ viewLogs       – log błędów
 - Konto: ksef-monitor@pm.me (devconsole)
 - Store URL: https://chromewebstore.google.com/detail/ksef-monitor/adfieckbhbajegaomloplmkiimcgamgk
 - Privacy policy: https://olaf-wilkosz.github.io/ksef-monitor/privacy-policy.html
-- Status: v1.0.0 opublikowane (16.03.2026), v1.0.1 w recenzji, v1.0.2 w przygotowaniu
-- Materiały: `store/listing.md`, `store/screenshots/`
+- Status: v1.0.1 opublikowane (21.03.2026), v1.0.2 w przygotowaniu
+- Materiały: `store/listing.md` (opisy PL+EN), `store/screenshots/` (5 screenshotów + 2 banery)
 
 ---
 
 ## Backlog
 
-### 🔴 Priorytetowe
+### 🔴 Przed releasem 1.0.2
 
-- `refreshTokenExpiry` przy `/auth/token/refresh` – zbadać format odpowiedzi gdy przyjdzie faktura; fallback 24h może skracać żywotność sesji
-- `allSeenIds` pruning – rośnie bez ograniczeń; przy 500+ faktur/rok zacznie wpływać na performance
+- Zbumpować `manifest.json` do `1.0.2`
 
 ### 🟡 Polish
 
 - Sticky nagłówki sekcji w liście faktur (przy 20+ fakturach)
-- Date range picker dla progu „oczekujących"
-- ARIA: `confirmModal` bez `role="dialog"`, `aria-modal="true"` i focus trap
+- Date range picker dla progu „oczekujących" (cross-platform, bez native `<input type="date">`)
+- ARIA: `confirmModal` bez `role="dialog"`, `aria-modal="true"` i focus trap przy nawigacji klawiaturą
 
 ### 🟡 Techniczny
 
-- Weryfikacja regex tokenu na tokenach spółek/pieczęć
-- crypto-shared.js refactor (niski priorytet)
+- `allSeenIds` pruning – rośnie bez ograniczeń; przy 500+ faktur/rok zacznie wpływać na performance `updateInvoices` (liniowe po rozmiarze kolekcji)
+- Weryfikacja regex tokenu na tokenach spółek/pieczęć elektroniczna (format zweryfikowany tylko na 1 próbce JDG)
 
 ### 🔴 Post-1.0
 
-- Firefox port (Zen Browser jako cel)
+- Firefox port (Zen Browser jako cel testowy; różnice `browser.*` vs `chrome.*`, SW lifecycle)
 - Multi-firma/NIP
 - Monetyzacja (Ko-fi / GitHub Sponsors)
 
@@ -214,11 +222,34 @@ viewLogs       – log błędów
 ## Jak testować
 
 1. `chrome://extensions` → Tryb dewelopera → Załaduj rozpakowane → wskaż `extension/`
-2. Po zmianie: kliknij 🔄 na karcie rozszerzenia
-3. Logi SW: kliknij „Service Worker" w `chrome://extensions`
-4. Logi popup: DevTools → prawy klik → Zbadaj
-5. Test UI-lock: w konsoli SW: `chrome.storage.local.set({pollState: {lastSuccessTime: new Date(Date.now()-5*3600000).toISOString(), consecutiveErrors:0, backoffUntil:null, needsPin:false, needsNewToken:false, lastError:null}})`
-6. Test lockout PIN: 5 błędnych PINów → 30s blokada z odliczaniem
+2. Po zmianie kodu: kliknij 🔄 na karcie rozszerzenia
+3. Logi SW: kliknij „Service Worker" w `chrome://extensions` – konsola musi być otwarta zanim wykonasz akcję
+4. Logi popup: kliknij prawym na ikonę rozszerzenia → Zbadaj
+5. **Test UI-lock** (konsola SW):
+
+```js
+chrome.storage.local.set({
+	pollState: {
+		lastSuccessTime: new Date(Date.now() - 5 * 3600000).toISOString(),
+		consecutiveErrors: 0,
+		backoffUntil: null,
+		needsPin: false,
+		needsNewToken: false,
+		lastError: null,
+	},
+});
+```
+
+6. **Test PIN lockout**: wpisz 5 błędnych PINów → 30s blokada z odliczaniem
+7. **Test refresh tokenu** (konsola SW po zalogowaniu):
+
+```js
+const s = await chrome.storage.session.get('accessTokenState');
+s.accessTokenState.accessTokenExpiry = Date.now() - 1000;
+await chrome.storage.session.set(s);
+```
+
+Następnie "Sprawdź teraz" – powinno odświeżyć bez PINu, badge powinien zostać.
 
 ## Jak zacząć nową sesję
 
