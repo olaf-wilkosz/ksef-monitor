@@ -190,19 +190,24 @@ export class KSeFClient {
 
 	// Odświeżenie accessToken
 	async refreshAccessToken(refreshToken) {
-		const data = await apiRequest(this.baseUrl, '/auth/token/refresh', {
-			method: 'POST',
-			body: { refreshToken },
-		});
-
-		return {
-			accessToken: data.accessToken,
-			refreshToken: data.refreshToken || refreshToken,
-			accessTokenExpiry: getJWTExpiry(data.accessToken),
-			refreshTokenExpiry: data.refreshToken?.validUntil
-				? new Date(data.refreshToken.validUntil).getTime()
-				: Date.now() + 86_400_000,
-		};
+		try {
+			const data = await apiRequest(this.baseUrl, '/auth/token/refresh', {
+				method: 'POST',
+				headers: { Authorization: 'Bearer ' + refreshToken },
+			});
+			return {
+				accessToken: data.accessToken?.token ?? data.accessToken,
+				accessTokenExpiry: data.accessToken?.validUntil
+					? new Date(data.accessToken.validUntil).getTime()
+					: getJWTExpiry(data.accessToken?.token ?? data.accessToken),
+				refreshToken: refreshToken,
+				refreshTokenExpiry: data.refreshToken?.validUntil
+					? new Date(data.refreshToken.validUntil).getTime()
+					: Date.now() + 7 * 24 * 60 * 60 * 1000,
+			};
+		} catch (err) {
+			throw err;
+		}
 	}
 
 	// 7. Metadane faktur zakupowych (Subject2 = nabywca)
