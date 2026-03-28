@@ -123,8 +123,13 @@ function determineAndShowView() {
 }
 
 function showView(id) {
-	document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
-	document.getElementById(id)?.classList.add('active');
+	document.querySelectorAll('.view').forEach((v) => {
+		v.classList.remove('active');
+		v.setAttribute('aria-hidden', 'true');
+	});
+	const activeView = document.getElementById(id);
+	activeView?.classList.add('active');
+	activeView?.setAttribute('aria-hidden', 'false');
 
 	// Auto-focus – kursor od razu w odpowiednim polu
 	const focusMap = {
@@ -708,6 +713,8 @@ function initPopupOtp(ids, toggleId, onComplete) {
 			const hidden = boxes[0].type === 'password';
 			boxes.forEach((b) => (b.type = hidden ? 'text' : 'password'));
 			toggle.classList.toggle('active', hidden);
+			toggle.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+			toggle.setAttribute('aria-label', hidden ? 'Ukryj PIN' : 'Pokaż PIN');
 		});
 	}
 }
@@ -1023,14 +1030,33 @@ async function handleRemoveToken() {
 	const btnCxl = document.getElementById('confirmCancel');
 
 	modal.style.display = 'flex';
+	btnCxl.focus(); // fokus na "Anuluj" przy otwarciu – bezpieczniejsza opcja domyślna
 
 	await new Promise((resolve) => {
+		const focusableEls = [btnCxl, btnOk];
+		const trapFocus = (e) => {
+			if (e.key !== 'Tab') return;
+			const first = focusableEls[0];
+			const last = focusableEls[focusableEls.length - 1];
+			if (e.shiftKey) {
+				if (document.activeElement === first) {
+					e.preventDefault();
+					last.focus();
+				}
+			} else {
+				if (document.activeElement === last) {
+					e.preventDefault();
+					first.focus();
+				}
+			}
+		};
 		const cleanup = (doIt) => {
 			modal.style.display = 'none';
 			btnOk.removeEventListener('click', onOk);
 			btnCxl.removeEventListener('click', onCancel);
 			modal.removeEventListener('click', onOverlay);
 			document.removeEventListener('keydown', onKey);
+			document.removeEventListener('keydown', trapFocus);
 			resolve(doIt);
 		};
 		const onOk = () => cleanup(true);
@@ -1039,12 +1065,17 @@ async function handleRemoveToken() {
 			if (e.target === modal) cleanup(false);
 		};
 		const onKey = (e) => {
-			if (e.key === 'Escape') cleanup(false);
+			if (e.key === 'Escape') {
+				e.preventDefault();
+				e.stopPropagation();
+				cleanup(false);
+			}
 		};
 		btnOk.addEventListener('click', onOk);
 		btnCxl.addEventListener('click', onCancel);
 		modal.addEventListener('click', onOverlay);
 		document.addEventListener('keydown', onKey);
+		document.addEventListener('keydown', trapFocus);
 	}).then(async (confirmed) => {
 		if (!confirmed) return;
 		await chrome.storage.local.clear();

@@ -139,6 +139,10 @@
 				border-color: #013f71;
 				box-shadow: 0 0 0 3px rgba(1, 63, 113, 0.08);
 			}
+			.modal-btn:focus-visible {
+				outline: 2px solid #013f71;
+				outline-offset: 2px;
+			}
 			.otp-box.filled {
 				border-color: #013f71;
 				background: #e8f0f8;
@@ -823,6 +827,29 @@
 			.footer a:hover {
 				text-decoration: underline;
 			}
+			.footer-link {
+				background: none;
+				border: none;
+				padding: 0;
+				font-size: 11px;
+				color: #013f71;
+				cursor: pointer;
+				font-family: inherit;
+			}
+			.footer-link:hover {
+				text-decoration: underline;
+			}
+			.sr-only {
+				position: absolute;
+				width: 1px;
+				height: 1px;
+				padding: 0;
+				margin: -1px;
+				overflow: hidden;
+				clip: rect(0, 0, 0, 0);
+				white-space: nowrap;
+				border: 0;
+			}
 		</style>
 	</head>
 	<body>
@@ -851,7 +878,8 @@
 				<div class="pin-title">🔑 Sesja wygasła</div>
 				<div class="pin-hint">Wprowadź PIN, aby ponownie odszyfrować token KSeF.</div>
 				<div class="pin-controls">
-					<div class="otp-row">
+					<div class="otp-row" role="group" aria-labelledby="pinGroupLabel">
+						<span id="pinGroupLabel" class="sr-only">4-cyfrowy PIN</span>
 						<input
 							type="password"
 							class="otp-box"
@@ -859,6 +887,8 @@
 							maxlength="1"
 							inputmode="numeric"
 							autocomplete="off"
+							aria-label="Cyfra 1 z 4"
+							aria-describedby="pinError"
 						/>
 						<input
 							type="password"
@@ -867,6 +897,8 @@
 							maxlength="1"
 							inputmode="numeric"
 							autocomplete="off"
+							aria-label="Cyfra 2 z 4"
+							aria-describedby="pinError"
 						/>
 						<input
 							type="password"
@@ -875,6 +907,8 @@
 							maxlength="1"
 							inputmode="numeric"
 							autocomplete="off"
+							aria-label="Cyfra 3 z 4"
+							aria-describedby="pinError"
 						/>
 						<input
 							type="password"
@@ -883,15 +917,25 @@
 							maxlength="1"
 							inputmode="numeric"
 							autocomplete="off"
+							aria-label="Cyfra 4 z 4"
+							aria-describedby="pinError"
 						/>
-						<button type="button" class="otp-toggle" id="pinToggle" title="Pokaż/ukryj PIN">👁</button>
+						<button
+							type="button"
+							class="otp-toggle"
+							id="pinToggle"
+							aria-label="Pokaż PIN"
+							aria-pressed="false"
+						>
+							👁
+						</button>
 					</div>
 					<div class="btn-row">
 						<button class="btn btn-primary" id="btnPinConfirm">Zaloguj ponownie</button>
 					</div>
 				</div>
 				<div id="pinErrorParking" style="display: none">
-					<div class="pin-error" id="pinError"></div>
+					<div class="pin-error" id="pinError" role="alert" aria-live="polite" aria-atomic="true"></div>
 				</div>
 			</div>
 		</div>
@@ -908,6 +952,7 @@
 					class="pin-input"
 					id="newTokenInput"
 					rows="3"
+					aria-label="Nowy token KSeF"
 					placeholder="Wklej nowy token KSeF..."
 					style="resize: none; font-size: 12px; line-height: 1.6; margin-bottom: 8px"
 				></textarea>
@@ -924,7 +969,8 @@
 						border: 1px solid #d0e4f0;
 					"
 				></div>
-				<div class="otp-row" style="margin-bottom: 0">
+				<div class="otp-row" role="group" aria-labelledby="newTokenPinGroupLabel" style="margin-bottom: 0">
+					<span id="newTokenPinGroupLabel" class="sr-only">4-cyfrowy PIN</span>
 					<input
 						type="password"
 						class="otp-box"
@@ -932,6 +978,8 @@
 						maxlength="1"
 						inputmode="numeric"
 						autocomplete="off"
+						aria-label="Cyfra 1 z 4"
+						aria-describedby="newTokenError"
 					/>
 					<input
 						type="password"
@@ -940,6 +988,8 @@
 						maxlength="1"
 						inputmode="numeric"
 						autocomplete="off"
+						aria-label="Cyfra 2 z 4"
+						aria-describedby="newTokenError"
 					/>
 					<input
 						type="password"
@@ -948,6 +998,8 @@
 						maxlength="1"
 						inputmode="numeric"
 						autocomplete="off"
+						aria-label="Cyfra 3 z 4"
+						aria-describedby="newTokenError"
 					/>
 					<input
 						type="password"
@@ -956,10 +1008,20 @@
 						maxlength="1"
 						inputmode="numeric"
 						autocomplete="off"
+						aria-label="Cyfra 4 z 4"
+						aria-describedby="newTokenError"
 					/>
-					<button type="button" class="otp-toggle" id="newTokenPinToggle" title="Pokaż/ukryj PIN">👁</button>
+					<button
+						type="button"
+						class="otp-toggle"
+						id="newTokenPinToggle"
+						aria-label="Pokaż PIN"
+						aria-pressed="false"
+					>
+						👁
+					</button>
 				</div>
-				<div class="pin-error" id="newTokenError"></div>
+				<div class="pin-error" id="newTokenError" role="alert" aria-live="polite" aria-atomic="true"></div>
 				<div class="btn-row" style="margin-top: 12px">
 					<button class="btn btn-primary" id="btnNewTokenConfirm">Zapisz nowy token</button>
 				</div>
@@ -971,7 +1033,7 @@
 			<div class="main-wrap">
 				<div class="status-row">
 					<span class="status-time" id="lastCheck">—</span>
-					<span class="status-badge s-ok" id="pollStatus">OK</span>
+					<span class="status-badge s-ok" id="pollStatus" aria-live="polite" aria-atomic="true">OK</span>
 				</div>
 
 				<div class="counter-row">
@@ -1008,7 +1070,7 @@
 				</div>
 
 				<!-- Toast – tuż pod listą, wstrzymuje się na hover -->
-				<div class="toast" id="toast">
+				<div class="toast" id="toast" role="status" aria-live="assertive" aria-atomic="true">
 					<span class="toast-msg" id="toastMsg"></span>
 					<button class="toast-undo" id="toastUndo">Cofnij</button>
 				</div>
@@ -1019,7 +1081,7 @@
 				<button
 					class="btn btn-primary btn-icon"
 					id="btnSettings"
-					title="Ustawienia"
+					aria-label="Ustawienia"
 					style="width: auto; flex: none; opacity: 0.75"
 				>
 					⚙️
@@ -1035,6 +1097,7 @@
 						type="text"
 						id="settingsCompanyInput"
 						readonly
+						aria-label="Nazwa firmy"
 						style="
 							width: 100%;
 							font-size: 12px;
@@ -1054,6 +1117,9 @@
 					/>
 					<span
 						id="settingsCompanyHint"
+						role="button"
+						tabindex="0"
+						aria-label="Edytuj nazwę firmy"
 						style="
 							position: absolute;
 							right: 8px;
@@ -1062,7 +1128,6 @@
 							font-size: 12px;
 							cursor: pointer;
 						"
-						title="Edytuj nazwę firmy"
 						>✏️</span
 					>
 				</div>
@@ -1073,7 +1138,7 @@
 						>Interwał sprawdzania
 						<span class="setting-sub">Minimum: 1 godzina (limit Chrome)</span>
 					</span>
-					<select class="setting-select" id="selectInterval">
+					<select class="setting-select" id="selectInterval" aria-label="Interwał sprawdzania">
 						<option value="60">Co 1 godzinę</option>
 						<option value="360">Co 6 godzin</option>
 						<option value="720">Co 12 godzin</option>
@@ -1082,7 +1147,7 @@
 				</div>
 				<div class="setting-row">
 					<span class="setting-label">Środowisko KSeF</span>
-					<select class="setting-select" id="selectEnv">
+					<select class="setting-select" id="selectEnv" aria-label="Środowisko KSeF">
 						<option value="production">Produkcja</option>
 						<option value="demo">Demo (TR)</option>
 						<option value="test">Test (TE)</option>
@@ -1096,7 +1161,7 @@
 						>Nowe przez ostatnie
 						<span class="setting-sub">Faktury starsze trafiają do "Wcześniejszych"</span>
 					</span>
-					<select class="setting-select" id="selectPendingDays">
+					<select class="setting-select" id="selectPendingDays" aria-label="Próg nowych faktur">
 						<option value="month">Bieżący miesiąc</option>
 						<option value="7">7 dni</option>
 						<option value="14">14 dni</option>
@@ -1112,7 +1177,7 @@
 						<span class="setting-sub">Nowe faktury i wygaśnięcie sesji</span>
 					</div>
 					<label class="toggle">
-						<input type="checkbox" id="toggleNotifications" />
+						<input type="checkbox" id="toggleNotifications" aria-label="Włącz powiadomienia push" />
 						<span class="toggle-slider"></span>
 					</label>
 				</div>
@@ -1133,6 +1198,8 @@
 				</button>
 				<div
 					id="reinitError"
+					role="alert"
+					aria-live="polite"
 					style="
 						display: none;
 						font-size: 11px;
@@ -1175,9 +1242,9 @@
 		</div>
 
 		<div class="footer">
-			<a href="#" id="lnkLogs">Logi błędów</a>
-			<a href="#" id="lnkContact">Kontakt</a>
-			<a href="https://ksef.podatki.gov.pl" target="_blank">Portal KSeF ↗</a>
+			<button class="footer-link" id="lnkLogs">Logi błędów</button>
+			<button class="footer-link" id="lnkContact">Kontakt</button>
+			<a href="https://ksef.podatki.gov.pl" target="_blank" rel="noopener noreferrer">Portal KSeF ↗</a>
 		</div>
 
 		<script src="popup.js"></script>
@@ -1185,6 +1252,9 @@
 		<!-- Modal potwierdzenia usunięcia tokenu -->
 		<div
 			id="confirmModal"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="confirmModalTitle"
 			style="
 				display: none;
 				position: fixed;
@@ -1205,7 +1275,10 @@
 					box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
 				"
 			>
-				<div style="font-size: 13px; font-weight: 600; color: #1a1a2e; margin-bottom: 8px">
+				<div
+					id="confirmModalTitle"
+					style="font-size: 13px; font-weight: 600; color: #1a1a2e; margin-bottom: 8px"
+				>
 					Usuń token i konfigurację?
 				</div>
 				<div style="font-size: 12px; color: #666; margin-bottom: 16px; line-height: 1.5">
@@ -1214,6 +1287,7 @@
 				<div style="display: flex; gap: 8px; justify-content: flex-end">
 					<button
 						id="confirmCancel"
+						class="modal-btn"
 						style="
 							background: #f0f0f0;
 							border: none;
@@ -1228,6 +1302,7 @@
 					</button>
 					<button
 						id="confirmOk"
+						class="modal-btn"
 						style="
 							background: #c62828;
 							border: none;
