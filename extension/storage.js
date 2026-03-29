@@ -222,35 +222,25 @@ export async function getInvoiceState() {
 	);
 }
 
-/** Normalizuje surowy obiekt faktury z KSeF API. */
+/** Normalizuje surowy obiekt faktury z KSeF API.
+ *
+ * Pola zweryfikowane na produkcji (KSeF API 2.0):
+ *   ID:      ksefNumber
+ *   Seller:  seller.name, seller.nip
+ *   Numer:   invoiceReferenceNumber
+ *   Data:    invoicingDate
+ *   Kwota:   grossAmount
+ *
+ * TODO: zweryfikować pola dla tokenów spółek/pieczęci – możliwy inny schemat seller.
+ */
 export function normalizeInvoice(raw) {
-	const ref =
-		raw.ksefNumber ||
-		raw.ksefReferenceNumber ||
-		raw.KsefReferenceNumber ||
-		raw.referenceNumber ||
-		raw.invoiceId ||
-		raw.id ||
-		'';
+	const ref = raw.ksefNumber || '';
 
-	const sellerName =
-		raw.seller?.name ||
-		raw.subjectBy?.subjectName ||
-		raw.subjectBy?.name ||
-		raw.sellerName ||
-		raw.issuerName ||
-		'Nieznany wystawca';
+	const sellerName = raw.seller?.name || 'Nieznany wystawca';
+	const sellerNip = raw.seller?.nip || '';
 
-	const sellerNip =
-		raw.seller?.nip ||
-		raw.subjectBy?.issuedToIdentifier?.value ||
-		raw.subjectBy?.identifier?.value ||
-		raw.sellerNip ||
-		raw.issuerNip ||
-		'';
-
-	const invoiceNumber = raw.invoiceReferenceNumber || raw.invoiceNumber || raw.number || '';
-	const issueDate = raw.invoicingDate || raw.issueDate || raw.issuedAt || raw.dateOfIssue || '';
+	const invoiceNumber = raw.invoiceReferenceNumber || '';
+	const issueDate = raw.invoicingDate || '';
 
 	return {
 		id: ref,
@@ -259,10 +249,9 @@ export function normalizeInvoice(raw) {
 		sellerNip,
 		invoiceNumber,
 		issueDate,
-		grossAmount: raw.grossAmount ?? raw.totalAmountWithTax ?? raw.totalGrossAmount ?? null,
+		grossAmount: raw.grossAmount ?? null,
 		currency: raw.currency || 'PLN',
 		fetchedAt: new Date().toISOString(),
-		_raw: undefined,
 	};
 }
 
