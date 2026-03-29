@@ -3,9 +3,9 @@
  *
  * Stan faktur:
  *   pendingInvoices  – nowe, nieprzejrzane (czarne, bold, z checkboxem)
- *   recentArchive    – ostatnich 5 przejrzanych (szare, bez checkboxa, punkt wyjścia)
+ *   recentArchive    – ostatnio przejrzane (szare, TTL 90 dni)
  *
- * FIFO wyświetlania: wszystkie pending + max 5 archive
+ * Renderowanie: pierwsze 10 pending/archive, przyciski "Pokaż kolejne"
  * Licznik + badge = pendingInvoices.length
  */
 
@@ -79,7 +79,7 @@ function migrateInvoiceState(raw) {
 // UI-lock (nie crypto-lock): po 4h bezczynności popup wymaga PIN zanim pokaże dane.
 // Background nadal polluje przez refresh token – PIN nie jest weryfikowany kryptograficznie.
 // Pełna weryfikacja kryptograficzna następuje dopiero gdy background ustawi needsPin=true
-// (wygaśnięcie refresh tokena ~24h). To jest świadoma decyzja projektowa.
+// (wygaśnięcie refresh tokena ~7 dni). To jest świadoma decyzja projektowa.
 const PIN_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 
 function determineAndShowView() {
@@ -92,7 +92,6 @@ function determineAndShowView() {
 			showView('viewSetup');
 			return;
 		}
-
 		if (ps.needsNewToken) {
 			showView('viewNewToken');
 			return;
@@ -111,7 +110,6 @@ function determineAndShowView() {
 
 		// accessToken jest w session storage (od v1.0.2) – sprawdzamy tylko refreshToken w local
 		const validRefresh = auth.refreshToken && auth.refreshTokenExpiry > Date.now() + 30_000;
-
 		if (!validRefresh && !lastSuccess) {
 			showView('viewPin');
 			return;
@@ -151,14 +149,10 @@ function renderMainView() {
 	const archive = invoiceState.recentArchive ?? [];
 	const count = pending.length;
 
-	// Licznik
 	const countEl = document.getElementById('invoiceCount');
 	countEl.textContent = count;
 	countEl.className = 'counter-num' + (count === 0 ? ' zero' : '');
 
-	document.getElementById('btnMarkAll').classList.toggle('visible', count > 0);
-
-	// Czas ostatniego sprawdzenia
 	const qt = pollState.lastSuccessTime;
 	document.getElementById('lastCheck').textContent = qt
 		? 'Sprawdzono ' +
@@ -170,10 +164,7 @@ function renderMainView() {
 			})
 		: 'Nigdy nie sprawdzono';
 
-	// Status badge
 	renderStatusBadge();
-
-	// Lista faktur
 	renderInvoiceList(pending, archive);
 }
 
@@ -210,13 +201,16 @@ const CHEVRON_SVG = `<svg width="10" height="10" viewBox="0 0 10 10" fill="none"
 // Persists collapse state across re-renders during the session
 const sectionCollapsed = { pending: false, archive: false };
 
+// Render counters – ile pozycji aktualnie wyrenderowanych (reset przy renderMainView)
+let renderedPendingCount = 10;
+let renderedArchiveCount = 10;
+const RENDER_PAGE = 10;
+
 function makeSectionLabel(text, type, bodyEl) {
 	const lbl = document.createElement('div');
 	lbl.className = `list-section-label${type === 'pending' ? ' pending' : ''}`;
 	if (sectionCollapsed[type]) lbl.classList.add('collapsed');
-
 	lbl.innerHTML = `<span>${text}</span><span class="section-chevron">${CHEVRON_SVG}</span>`;
-
 	const toggle = () => {
 		sectionCollapsed[type] = !sectionCollapsed[type];
 		lbl.classList.toggle('collapsed', sectionCollapsed[type]);
@@ -252,26 +246,80 @@ function renderInvoiceList(pending, archive) {
 		const sorted = [...pending].sort((a, b) =>
 			(b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || '')
 		);
-		const rows = sorted.map((inv) => buildInvoiceRow(inv, 'pending'));
+		const visible = sorted.slice(0, renderedPendingCount);
+		const remaining = sorted.length - visible.length;
 
-		if (hasArchive) {
-			const body = document.createElement('div');
-			body.className = 'section-body' + (sectionCollapsed.pending ? ' collapsed' : '');
-			const inner = document.createElement('div'); // wymagane przez grid-trick
-			rows.forEach((r) => inner.appendChild(r));
-			body.appendChild(inner);
-			list.appendChild(makeSectionLabel(`Nowe (${pending.length})`, 'pending', body));
-			list.appendChild(body);
-		} else {
-			rows.forEach((r) => list.appendChild(r));
+		const body = document.createElement('div');
+		body.className = 'section-body' + (sectionCollapsed.pending ? ' collapsed' : '');
+		const inner = document.createElement('div'); // wymagane przez grid-trick
+
+		visible.forEach((inv) => inner.appendChild(buildInvoiceRow(inv, 'pending')));
+
+		// Przyciski na dole sekcji Nowe
+		const actionsRow = document.createElement('div');
+		actionsRow.className = 'section-actions';
+
+		if (remaining > 0) {
+			const btnMore = document.createElement('button');
+			btnMore.className = 'btn-section-action';
+			btnMore.textContent = `Pokaż kolejne ${Math.min(RENDER_PAGE, remaining)} nowe (${remaining} oczekujących)`;
+			btnMore.addEventListener('click', () => {
+				renderedPendingCount += RENDER_PAGE;
+				renderInvoiceList(invoiceState.pendingInvoices ?? [], invoiceState.recentArchive ?? []);
+			});
+			actionsRow.appendChild(btnMore);
 		}
+
+		const btnAll = document.createElement('button');
+		btnAll.className = 'btn-section-action btn-section-action--all';
+		btnAll.textContent = `Oznacz wszystkie ${sorted.length} nowe jako przejrzane`;
+		btnAll.addEventListener('click', async () => {
+			const snapshot = [...(invoiceState.pendingInvoices ?? [])];
+			if (snapshot.length === 0) return;
+			await chrome.runtime.sendMessage({ type: 'MARK_ALL_NOTICED' });
+			invoiceState.recentArchive = [...snapshot, ...(invoiceState.recentArchive ?? [])];
+			invoiceState.pendingInvoices = [];
+			renderedPendingCount = RENDER_PAGE;
+			renderMainView();
+			showBulkToast(snapshot);
+		});
+		actionsRow.appendChild(btnAll);
+		inner.appendChild(actionsRow);
+
+		body.appendChild(inner);
+		if (hasArchive) {
+			list.appendChild(makeSectionLabel(`Nowe (${pending.length})`, 'pending', body));
+		}
+		list.appendChild(body);
 	}
 
 	if (hasArchive) {
+		const sorted = [...archive].sort((a, b) =>
+			(b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || '')
+		);
+		const visible = sorted.slice(0, renderedArchiveCount);
+		const remaining = sorted.length - visible.length;
+
 		const body = document.createElement('div');
 		body.className = 'section-body' + (sectionCollapsed.archive ? ' collapsed' : '');
 		const inner = document.createElement('div'); // wymagane przez grid-trick
-		archive.forEach((inv) => inner.appendChild(buildInvoiceRow(inv, 'archive')));
+
+		visible.forEach((inv) => inner.appendChild(buildInvoiceRow(inv, 'archive')));
+
+		if (remaining > 0) {
+			const actionsRow = document.createElement('div');
+			actionsRow.className = 'section-actions';
+			const btnMore = document.createElement('button');
+			btnMore.className = 'btn-section-action';
+			btnMore.textContent = `Pokaż kolejne ${Math.min(RENDER_PAGE, remaining)} wcześniejsze (${remaining} pozostałych)`;
+			btnMore.addEventListener('click', () => {
+				renderedArchiveCount += RENDER_PAGE;
+				renderInvoiceList(invoiceState.pendingInvoices ?? [], invoiceState.recentArchive ?? []);
+			});
+			actionsRow.appendChild(btnMore);
+			inner.appendChild(actionsRow);
+		}
+
 		body.appendChild(inner);
 		list.appendChild(makeSectionLabel(`Wcześniejsze (${archive.length})`, 'archive', body));
 		list.appendChild(body);
@@ -367,13 +415,10 @@ async function handleDismissArchive(inv, itemEl) {
 async function handleMarkNoticed(inv, itemEl) {
 	// Animacja znikania
 	itemEl.classList.add('dismissing');
-
 	await chrome.runtime.sendMessage({ type: 'MARK_NOTICED', invoiceId: inv.id });
-
 	// Aktualizuj lokalny stan
 	invoiceState.pendingInvoices = (invoiceState.pendingInvoices ?? []).filter((i) => i.id !== inv.id);
-	invoiceState.recentArchive = [inv, ...(invoiceState.recentArchive ?? [])].slice(0, 5);
-
+	invoiceState.recentArchive = [inv, ...(invoiceState.recentArchive ?? [])];
 	renderMainView();
 	showToast(inv);
 }
@@ -417,7 +462,7 @@ function showBulkToast(snapshot) {
 	const n = snapshot.length;
 	document.getElementById('toastMsg').textContent =
 		`✓ Oznaczono ${n} ${n === 1 ? 'fakturę' : n < 5 ? 'faktury' : 'faktur'}`;
-	document.getElementById('toastUndo').style.display = ''; // przywróć – showInfoToast go chowa
+	document.getElementById('toastUndo').style.display = '';
 	document.getElementById('toast').classList.add('visible');
 	toastTimer = setTimeout(dismissToast, 4000);
 }
@@ -448,9 +493,9 @@ async function handleUndoNoticed() {
 		await chrome.runtime.sendMessage({ type: 'UNDO_DISMISS_ARCHIVE', invoiceId: id });
 		const restored = invoiceState._lastDismissed;
 		if (restored) {
-			invoiceState.recentArchive = [restored, ...(invoiceState.recentArchive ?? [])]
-				.slice(0, 5)
-				.sort((a, b) => (b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || ''));
+			invoiceState.recentArchive = [restored, ...(invoiceState.recentArchive ?? [])].sort((a, b) =>
+				(b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || '')
+			);
 			delete invoiceState._lastDismissed;
 		} else {
 			await loadState();
@@ -546,18 +591,6 @@ function bindEvents() {
 	);
 
 	document.getElementById('btnCheckNow').addEventListener('click', handleCheckNow);
-
-	document.getElementById('btnMarkAll').addEventListener('click', async () => {
-		const snapshot = [...(invoiceState.pendingInvoices ?? [])];
-		if (snapshot.length === 0) return;
-
-		await chrome.runtime.sendMessage({ type: 'MARK_ALL_NOTICED' });
-		invoiceState.recentArchive = [...snapshot, ...(invoiceState.recentArchive ?? [])].slice(0, 5);
-		invoiceState.pendingInvoices = [];
-		renderMainView();
-		showBulkToast(snapshot);
-	});
-
 	document.getElementById('btnReinitArchive').addEventListener('click', handleReinitArchive);
 	document.getElementById('btnSettings').addEventListener('click', showSettingsView);
 	document.getElementById('btnSaveSettings').addEventListener('click', handleSaveSettings);
@@ -567,7 +600,6 @@ function bindEvents() {
 		showView('viewMain');
 	});
 	document.getElementById('btnRemoveToken').addEventListener('click', handleRemoveToken);
-
 	document.getElementById('btnErrorBack').addEventListener('click', determineAndShowView);
 	document.getElementById('btnLogsBack').addEventListener('click', determineAndShowView);
 	document.getElementById('btnClearLogs').addEventListener('click', async () => {
@@ -578,7 +610,6 @@ function bindEvents() {
 		e.preventDefault();
 		showErrorLogs();
 	});
-
 	document.getElementById('lnkContact').addEventListener('click', async (e) => {
 		e.preventDefault();
 		// Mailto z pre-wypełnionym tematem zawierającym wersję – ułatwia sortowanie zgłoszeń
@@ -587,7 +618,6 @@ function bindEvents() {
 		const body = encodeURIComponent('Cześć,\n\nChciałem zgłosić / zapytać o:\n\n');
 		window.open(`mailto:ksef-monitor@pm.me?subject=${subject}&body=${body}`, '_blank');
 	});
-
 	document.getElementById('toastUndo').addEventListener('click', handleUndoNoticed);
 
 	// Wstrzymaj odliczanie gdy kursor na toaście
@@ -630,7 +660,7 @@ function setPinError(errEl, msg) {
 }
 
 function clearPinBoxes(ids) {
-	ids.forEach((id, i) => {
+	ids.forEach((id) => {
 		const b = document.getElementById(id);
 		if (b) {
 			b.value = '';
@@ -735,12 +765,11 @@ async function handlePinConfirm() {
 	const lockoutData = await chrome.storage.local.get('pinLockout');
 	let lockout = lockoutData.pinLockout ?? { attempts: 0, lockedUntil: null };
 
-	// Reset attempts gdy lockout już minął
 	if (lockout.lockedUntil && Date.now() >= lockout.lockedUntil) {
+		// Reset attempts gdy lockout już minął
 		lockout = { attempts: 0, lockedUntil: null };
 		await chrome.storage.local.remove('pinLockout');
 	}
-
 	if (lockout.lockedUntil && Date.now() < lockout.lockedUntil) {
 		showLockoutCountdown(errEl, lockout.lockedUntil);
 		return;
@@ -836,27 +865,19 @@ async function handleNewTokenConfirm() {
 
 	if (!token || token.length < 20) {
 		errEl.textContent = 'Token jest za krótki – wklej pełny token z portalu KSeF.';
-
 		return;
 	}
 	if (pin.length < 4) {
 		errEl.textContent = 'Wprowadź 4-cyfrowy PIN.';
-
 		return;
 	}
 
 	const nipFromToken = extractNipFromToken(token);
-
 	btn.disabled = true;
 	btn.innerHTML = `<div class="spinner"></div> Zapisuję...`;
 
 	try {
-		const response = await chrome.runtime.sendMessage({
-			type: 'UPDATE_TOKEN',
-			token,
-			pin,
-			nip: nipFromToken,
-		});
+		const response = await chrome.runtime.sendMessage({ type: 'UPDATE_TOKEN', token, pin, nip: nipFromToken });
 		if (response.ok) {
 			document.getElementById('newTokenInput').value = '';
 			['newTokenPinBox0', 'newTokenPinBox1', 'newTokenPinBox2', 'newTokenPinBox3'].forEach((id) => {
@@ -890,13 +911,11 @@ async function handleCheckNow() {
 	const btn = document.getElementById('btnCheckNow');
 	btn.disabled = true;
 	btn.innerHTML = `<div class="spinner"></div> Sprawdzam...`;
-
 	await chrome.runtime.sendMessage({ type: 'CLEAR_BACKOFF' }).catch(() => {});
 
 	try {
 		const response = await chrome.runtime.sendMessage({ type: 'POLL_NOW' });
 		await loadState();
-
 		if (response.ok) {
 			renderMainView();
 		} else if (
@@ -928,7 +947,6 @@ async function handleReinitArchive() {
 
 	try {
 		const response = await chrome.runtime.sendMessage({ type: 'REINITIALIZE_ARCHIVE' });
-
 		if (response.ok) {
 			await loadState();
 			renderMainView();
@@ -1006,19 +1024,15 @@ async function handleSaveSettings() {
 		config.companyName = scInput.value.trim() || null;
 		cancelSettingsCompanyEdit();
 	}
-
 	config.pollIntervalMinutes = parseInt(document.getElementById('selectInterval').value, 10);
 	config.environment = document.getElementById('selectEnv').value;
 	const rawDays = document.getElementById('selectPendingDays').value;
 	config.pendingDaysThreshold = rawDays === 'month' ? 'month' : parseInt(rawDays, 10);
 	config.notificationsEnabled = document.getElementById('toggleNotifications').checked;
-
 	await chrome.storage.local.set({ config });
 	await chrome.runtime.sendMessage({ type: 'UPDATE_INTERVAL', minutes: config.pollIntervalMinutes });
-
 	document.getElementById('envLabel').textContent =
 		{ production: 'PRD', demo: 'DEMO', test: 'TEST' }[config.environment] ?? 'PRD';
-
 	await loadState();
 	renderMainView();
 	showView('viewMain');
@@ -1103,16 +1117,13 @@ function renderLogsList(logs) {
 	const listEl = document.getElementById('logsList');
 	const emptyEl = document.getElementById('logsEmpty');
 	listEl.innerHTML = '';
-
 	if (logs.length === 0) {
 		listEl.style.display = 'none';
 		emptyEl.style.display = 'block';
 		return;
 	}
-
 	listEl.style.display = 'flex';
 	emptyEl.style.display = 'none';
-
 	logs.slice(0, 20).forEach((e) => {
 		const entry = document.createElement('div');
 		entry.className = 'log-entry error';
@@ -1153,7 +1164,6 @@ function escHtml(str) {
  */
 function handleOpenInPortal(ksefRef, environment) {
 	const portalUrl = environment === 'production' ? 'https://ap.ksef.mf.gov.pl' : 'https://ap-demo.ksef.mf.gov.pl';
-
 	if (ksefRef) {
 		navigator.clipboard.writeText(ksefRef).catch(() => {});
 	}

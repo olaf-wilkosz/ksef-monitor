@@ -243,6 +243,51 @@
 				pointer-events: auto;
 			}
 
+			/* Przyciski "Pokaż kolejne" i "Oznacz wszystkie" na dole sekcji listy */
+			.section-actions {
+				display: flex;
+				flex-direction: column;
+				gap: 4px;
+				padding: 6px 10px 8px;
+				border-top: 1px solid #e6edf4;
+				animation: fadeSlideIn 0.18s ease;
+			}
+			@keyframes fadeSlideIn {
+				from {
+					opacity: 0;
+					transform: translateY(-4px);
+				}
+				to {
+					opacity: 1;
+					transform: translateY(0);
+				}
+			}
+			.btn-section-action {
+				background: none;
+				border: 1px solid #d0e4f0;
+				border-radius: 6px;
+				padding: 5px 10px;
+				font-size: 11px;
+				color: #013f71;
+				cursor: pointer;
+				text-align: center;
+				transition:
+					background 0.12s,
+					border-color 0.12s;
+			}
+			.btn-section-action:hover {
+				background: #edf2f7;
+				border-color: #b0c8e0;
+			}
+			.btn-section-action--all {
+				color: #555;
+				border-color: #e0e0e0;
+			}
+			.btn-section-action--all:hover {
+				background: #f5f5f5;
+				border-color: #bdbdbd;
+			}
+
 			/* Invoice list */
 			.invoice-list {
 				max-height: 320px;
@@ -250,6 +295,7 @@
 				border: 1px solid #e6edf4;
 				border-radius: 8px;
 				margin-bottom: 10px;
+				scrollbar-gutter: stable;
 			}
 			.invoice-list::-webkit-scrollbar {
 				width: 3px;
@@ -1041,7 +1087,6 @@
 						<span class="counter-num zero" id="invoiceCount">0</span>
 						<span class="counter-sub">nieprzejrzanych</span>
 					</div>
-					<button class="btn-mark-all" id="btnMarkAll">Oznacz wszystkie ✓</button>
 				</div>
 
 				<div class="invoice-list" id="invoiceList">

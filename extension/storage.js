@@ -4,7 +4,7 @@
  * Schemat invoiceState (v0.3):
  *   allSeenIds:      string[]   – wszystkie ID jakie kiedykolwiek pobraliśmy (deduplikacja)
  *   pendingInvoices: Invoice[]  – nowe, nieprzejrzane (licznik + badge)
- *   recentArchive:   Invoice[]  – max 5 ostatnio przejrzanych (szare, punkt wyjścia)
+ *   recentArchive:   Invoice[]  – ostatnio przejrzane (TTL 90 dni, bez limitu ilościowego)
  *   lastQueryTime:   string|null
  */
 
@@ -19,7 +19,7 @@ const KEYS = {
 	PIN_LOCKOUT: 'pinLockout',
 };
 
-const ARCHIVE_MAX = 5;
+const ARCHIVE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 dni
 
 // ─── Primitives ───────────────────────────────────────────────────────────────
 
@@ -204,7 +204,6 @@ export async function saveInvoiceState(state) {
 
 export async function getInvoiceState() {
 	const raw = await get(KEYS.INVOICE_STATE);
-	// Migracja z v0.1.x / v0.2.0 (stary schemat: lastSeenIds, newCount)
 	if (raw && (raw.lastSeenIds || raw.newCount != null) && !raw.allSeenIds) {
 		return {
 			allSeenIds: raw.lastSeenIds ?? [],
@@ -225,9 +224,8 @@ export async function getInvoiceState() {
 
 /** Normalizuje surowy obiekt faktury z KSeF API. */
 export function normalizeInvoice(raw) {
-	// Szeroki fallback na ID – KSeF API może zwracać różne nazwy pola
 	const ref =
-		raw.ksefNumber || // ✓ faktyczna nazwa pola w KSeF API 2.0
+		raw.ksefNumber ||
 		raw.ksefReferenceNumber ||
 		raw.KsefReferenceNumber ||
 		raw.referenceNumber ||
@@ -235,7 +233,6 @@ export function normalizeInvoice(raw) {
 		raw.id ||
 		'';
 
-	// Seller name – faktyczna struktura: raw.seller.name
 	const sellerName =
 		raw.seller?.name ||
 		raw.subjectBy?.subjectName ||
@@ -244,7 +241,6 @@ export function normalizeInvoice(raw) {
 		raw.issuerName ||
 		'Nieznany wystawca';
 
-	// NIP sprzedawcy – faktyczna struktura: raw.seller.nip
 	const sellerNip =
 		raw.seller?.nip ||
 		raw.subjectBy?.issuedToIdentifier?.value ||
@@ -253,10 +249,7 @@ export function normalizeInvoice(raw) {
 		raw.issuerNip ||
 		'';
 
-	// Numer faktury
 	const invoiceNumber = raw.invoiceReferenceNumber || raw.invoiceNumber || raw.number || '';
-
-	// Data wystawienia
 	const issueDate = raw.invoicingDate || raw.issueDate || raw.issuedAt || raw.dateOfIssue || '';
 
 	return {
@@ -269,28 +262,22 @@ export function normalizeInvoice(raw) {
 		grossAmount: raw.grossAmount ?? raw.totalAmountWithTax ?? raw.totalGrossAmount ?? null,
 		currency: raw.currency || 'PLN',
 		fetchedAt: new Date().toISOString(),
-		_raw: undefined, // nie przechowujemy surowych danych
+		_raw: undefined,
 	};
 }
 
 /**
  * Inicjalizuje stan po onboardingu.
- *
- * Faktury z ostatnich 7 dni → pendingInvoices (nowe, licznik + badge).
- * Starsze → recentArchive (max 5, szare, punkt wyjścia).
- *
- * Dzięki temu użytkownik od razu widzi faktury które mogły przyjść
- * podczas gdy nie miał jeszcze rozszerzenia. Wszystkie ID trafiają
- * do allSeenIds – następny poll nie uzna ich za "nowe".
- *
- * @returns {number} liczba faktur w pending (do ustawienia badge)
+ * Faktury z progu pendingDaysThreshold → pendingInvoices.
+ * Starsze → recentArchive (bez limitu ilościowego, TTL 90 dni).
+ * @returns {number} liczba faktur w pending
  */
 export async function initializeArchive(rawInvoices) {
 	const cfg = await getConfig();
 	const threshold = cfg.pendingDaysThreshold ?? 'month';
 	const cutoff =
 		threshold === 'month'
-			? new Date(new Date().getFullYear(), new Date().getMonth(), 1) // 1. dzień bieżącego miesiąca
+			? new Date(new Date().getFullYear(), new Date().getMonth(), 1)
 			: new Date(Date.now() - Number(threshold) * 24 * 3_600_000);
 
 	const normalized = rawInvoices
@@ -309,7 +296,7 @@ export async function initializeArchive(rawInvoices) {
 	await set(KEYS.INVOICE_STATE, {
 		allSeenIds: [...new Set(normalized.map((inv) => inv.id))],
 		pendingInvoices: pending,
-		recentArchive: older.slice(0, ARCHIVE_MAX),
+		recentArchive: older,
 		lastQueryTime: oldestDate,
 	});
 
@@ -319,6 +306,7 @@ export async function initializeArchive(rawInvoices) {
 /**
  * Aktualizuje stan podczas regularnego pollingu.
  * Nowe faktury (nieznane) → pendingInvoices.
+ * Przycina recentArchive do wpisów młodszych niż 90 dni.
  * @returns {number} liczba nowych faktur
  */
 export async function updateInvoices(rawInvoices) {
@@ -330,10 +318,15 @@ export async function updateInvoices(rawInvoices) {
 
 	const newAllIds = [...new Set([...state.allSeenIds, ...normalized.map((inv) => inv.id)])];
 
+	const cutoff = Date.now() - ARCHIVE_TTL_MS;
+	const prunedArchive = state.recentArchive.filter(
+		(inv) => new Date(inv.fetchedAt || inv.issueDate || 0).getTime() > cutoff
+	);
+
 	await set(KEYS.INVOICE_STATE, {
 		allSeenIds: newAllIds,
 		pendingInvoices: [...state.pendingInvoices, ...trulyNew],
-		recentArchive: state.recentArchive,
+		recentArchive: prunedArchive,
 		lastQueryTime: new Date().toISOString(),
 	});
 
@@ -341,7 +334,7 @@ export async function updateInvoices(rawInvoices) {
 }
 
 /**
- * Przenosi fakturę z pendingInvoices → recentArchive (FIFO, max 5).
+ * Przenosi fakturę z pendingInvoices → recentArchive.
  * @returns {Invoice|null} przeniesiona faktura (do undo)
  */
 export async function markNoticed(invoiceId) {
@@ -352,7 +345,7 @@ export async function markNoticed(invoiceId) {
 	await set(KEYS.INVOICE_STATE, {
 		...state,
 		pendingInvoices: state.pendingInvoices.filter((inv) => inv.id !== invoiceId),
-		recentArchive: [invoice, ...state.recentArchive].slice(0, ARCHIVE_MAX),
+		recentArchive: [invoice, ...state.recentArchive],
 	});
 	return invoice;
 }
@@ -374,46 +367,41 @@ export async function undoNoticed(invoiceId) {
 
 /**
  * Wypełnia recentArchive najnowszymi fakturami jeśli jest puste.
- * Działa tylko gdy dostajemy jakiekolwiek faktury z bieżącego pollu.
- * @param {object[]} rawInvoices – surowe faktury z ostatniego pollu
  */
 export async function ensureArchiveBackfill(rawInvoices) {
 	const state = await getInvoiceState();
-	if (state.recentArchive.length > 0) return; // już jest archiwum
-
+	if (state.recentArchive.length > 0) return;
 	if (!rawInvoices || rawInvoices.length === 0) return;
 
 	const seenSet = new Set(state.allSeenIds);
 	const archive = rawInvoices
 		.map(normalizeInvoice)
 		.filter((inv) => inv.id && seenSet.has(inv.id))
-		.sort((a, b) => (b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || ''))
-		.slice(0, ARCHIVE_MAX);
+		.sort((a, b) => (b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || ''));
 
 	if (archive.length === 0) return;
-
 	await set(KEYS.INVOICE_STATE, { ...state, recentArchive: archive });
 }
 
-/** Usuwa fakturę z archiwum (inbox zero dla archiwalnych). */
+/** Usuwa fakturę z archiwum. */
 export async function dismissFromArchive(invoiceId) {
 	const state = await getInvoiceState();
 	const invoice = state.recentArchive.find((inv) => inv.id === invoiceId);
-	if (invoice) await set(KEYS.ARCHIVE_UNDO_BUFFER, invoice); // zapamiętaj do undo (4s)
+	if (invoice) await set(KEYS.ARCHIVE_UNDO_BUFFER, invoice);
 	await set(KEYS.INVOICE_STATE, {
 		...state,
 		recentArchive: state.recentArchive.filter((inv) => inv.id !== invoiceId),
 	});
 }
 
-/** Cofa dismissFromArchive – przywraca fakturę do archiwum na właściwej pozycji (sort by issueDate). */
+/** Cofa dismissFromArchive. */
 export async function undoDismissArchive(invoiceId) {
 	const undoBuffer = await get(KEYS.ARCHIVE_UNDO_BUFFER);
 	if (!undoBuffer || undoBuffer.id !== invoiceId) return;
 	const state = await getInvoiceState();
-	const merged = [undoBuffer, ...state.recentArchive]
-		.slice(0, ARCHIVE_MAX)
-		.sort((a, b) => (b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || ''));
+	const merged = [undoBuffer, ...state.recentArchive].sort((a, b) =>
+		(b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || '')
+	);
 	await set(KEYS.INVOICE_STATE, { ...state, recentArchive: merged });
 	await remove(KEYS.ARCHIVE_UNDO_BUFFER);
 }
@@ -424,7 +412,7 @@ export async function markAllNoticed() {
 	await set(KEYS.INVOICE_STATE, {
 		...state,
 		pendingInvoices: [],
-		recentArchive: [...state.pendingInvoices, ...state.recentArchive].slice(0, ARCHIVE_MAX),
+		recentArchive: [...state.pendingInvoices, ...state.recentArchive],
 	});
 }
 
