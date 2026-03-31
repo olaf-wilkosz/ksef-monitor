@@ -206,17 +206,51 @@ let renderedPendingCount = 10;
 let renderedArchiveCount = 10;
 const RENDER_PAGE = 10;
 
-function makeSectionLabel(text, type, bodyEl) {
+function makeSectionLabel(text, type, bodyEl, bodyId) {
 	const lbl = document.createElement('div');
 	lbl.className = `list-section-label${type === 'pending' ? ' pending' : ''}`;
 	if (sectionCollapsed[type]) lbl.classList.add('collapsed');
-	lbl.innerHTML = `<span>${text}</span><span class="section-chevron">${CHEVRON_SVG}</span>`;
+
+	// Tekst – przewija listę do tej sekcji
+	const btnScroll = document.createElement('button');
+	btnScroll.className = 'section-label-text';
+	btnScroll.textContent = text;
+	btnScroll.setAttribute('aria-label', `Przewiń do sekcji ${type === 'pending' ? 'Nowe' : 'Wcześniejsze'}`);
+	btnScroll.addEventListener('click', () => {
+		const list = document.getElementById('invoiceList');
+		if (type === 'pending') {
+			// "Nowe" jest sticky – przewijamy listę do góry żeby odsłonić treść sekcji
+			list.scrollTo({ top: 0, behavior: 'smooth' });
+		} else {
+			lbl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		}
+	});
+
+	// Chevron – zwija/rozwija
+	const btnToggle = document.createElement('button');
+	btnToggle.className = 'section-chevron';
+	btnToggle.innerHTML = CHEVRON_SVG;
+	btnToggle.setAttribute('aria-expanded', sectionCollapsed[type] ? 'false' : 'true');
+	if (bodyId) btnToggle.setAttribute('aria-controls', bodyId);
+	btnToggle.setAttribute(
+		'aria-label',
+		`${sectionCollapsed[type] ? 'Rozwiń' : 'Zwiń'} sekcję ${type === 'pending' ? 'Nowe' : 'Wcześniejsze'}`
+	);
+
 	const toggle = () => {
 		sectionCollapsed[type] = !sectionCollapsed[type];
 		lbl.classList.toggle('collapsed', sectionCollapsed[type]);
 		bodyEl.classList.toggle('collapsed', sectionCollapsed[type]);
+		btnToggle.setAttribute('aria-expanded', sectionCollapsed[type] ? 'false' : 'true');
+		btnToggle.setAttribute(
+			'aria-label',
+			`${sectionCollapsed[type] ? 'Rozwiń' : 'Zwiń'} sekcję ${type === 'pending' ? 'Nowe' : 'Wcześniejsze'}`
+		);
 	};
-	lbl.addEventListener('click', toggle);
+	btnToggle.addEventListener('click', toggle);
+
+	lbl.appendChild(btnScroll);
+	lbl.appendChild(btnToggle);
 	return lbl;
 }
 
@@ -251,6 +285,7 @@ function renderInvoiceList(pending, archive) {
 
 		const body = document.createElement('div');
 		body.className = 'section-body' + (sectionCollapsed.pending ? ' collapsed' : '');
+		body.id = 'sectionBodyPending';
 		const inner = document.createElement('div'); // wymagane przez grid-trick
 
 		visible.forEach((inv) => inner.appendChild(buildInvoiceRow(inv, 'pending')));
@@ -288,7 +323,14 @@ function renderInvoiceList(pending, archive) {
 
 		body.appendChild(inner);
 		if (hasArchive) {
-			list.appendChild(makeSectionLabel(`Nowe (${pending.length})`, 'pending', body));
+			const pendingLabel = makeSectionLabel(`Nowe (${pending.length})`, 'pending', body, 'sectionBodyPending');
+			list.appendChild(pendingLabel);
+			// Ustaw top dla "Wcześniejsze" po wyrenderowaniu Nowe – sticky stacking
+			requestAnimationFrame(() => {
+				const h = pendingLabel.getBoundingClientRect().height;
+				const archiveLabel = list.querySelector('.list-section-label:not(.pending)');
+				if (archiveLabel) archiveLabel.style.top = `${h}px`;
+			});
 		}
 		list.appendChild(body);
 	}
@@ -302,6 +344,7 @@ function renderInvoiceList(pending, archive) {
 
 		const body = document.createElement('div');
 		body.className = 'section-body' + (sectionCollapsed.archive ? ' collapsed' : '');
+		body.id = 'sectionBodyArchive';
 		const inner = document.createElement('div'); // wymagane przez grid-trick
 
 		visible.forEach((inv) => inner.appendChild(buildInvoiceRow(inv, 'archive')));
@@ -321,7 +364,7 @@ function renderInvoiceList(pending, archive) {
 		}
 
 		body.appendChild(inner);
-		list.appendChild(makeSectionLabel(`Wcześniejsze (${archive.length})`, 'archive', body));
+		list.appendChild(makeSectionLabel(`Wcześniejsze (${archive.length})`, 'archive', body, 'sectionBodyArchive'));
 		list.appendChild(body);
 	}
 }

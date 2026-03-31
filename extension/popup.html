@@ -323,8 +323,9 @@
 				justify-content: space-between;
 				cursor: pointer;
 				user-select: none;
-				position: relative;
-				z-index: 1;
+				position: sticky;
+				top: 0;
+				z-index: 2; /* wyżej niż wiersze faktur żeby nie przeświecały */
 			}
 			.list-section-label:hover {
 				background: #f2f3f4;
@@ -339,15 +340,49 @@
 			.list-section-label.pending:hover {
 				background: #dce8f0;
 			}
+			.section-label-text {
+				background: none;
+				border: none;
+				padding: 0;
+				font: inherit;
+				font-size: 10px;
+				font-weight: 700;
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+				color: inherit;
+				cursor: pointer;
+				text-align: left;
+				flex: 1;
+			}
+			.section-label-text:focus-visible {
+				outline: 2px solid #013f71;
+				outline-offset: 2px;
+				border-radius: 2px;
+			}
 			.section-chevron {
-				width: 14px;
-				height: 14px;
+				background: none;
+				border: none;
+				padding: 0;
+				cursor: pointer;
+				width: 20px;
+				height: 20px;
 				display: flex;
 				align-items: center;
 				justify-content: center;
 				opacity: 0.7;
-				transition: transform 0.2s ease;
+				transition:
+					transform 0.2s ease,
+					opacity 0.15s;
 				flex-shrink: 0;
+				border-radius: 3px;
+			}
+			.section-chevron:hover {
+				opacity: 1;
+				background: rgba(0, 0, 0, 0.06);
+			}
+			.section-chevron:focus-visible {
+				outline: 2px solid #013f71;
+				outline-offset: 1px;
 			}
 			.section-chevron svg {
 				display: block;
