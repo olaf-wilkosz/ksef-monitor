@@ -142,6 +142,12 @@ document.addEventListener('DOMContentLoaded', () => {
 			this.textContent = '✓';
 		}
 	});
+	document.getElementById('companyEditHint').addEventListener('keydown', function (e) {
+		if (e.key === 'Enter' || e.key === ' ') {
+			e.preventDefault();
+			this.click();
+		}
+	});
 
 	document.getElementById('companyBadge').addEventListener('keydown', function (e) {
 		if (e.key === 'Enter') {
@@ -186,10 +192,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 	// Toggle podglądu PIN
 	document.getElementById('pinToggle').addEventListener('click', () => {
+		const toggle = document.getElementById('pinToggle');
 		const boxes = otpBoxes();
 		const isHidden = boxes[0].type === 'password';
 		boxes.forEach((b) => (b.type = isHidden ? 'text' : 'password'));
-		document.getElementById('pinToggle').style.color = isHidden ? '#1565c0' : '#aaa';
+		toggle.style.color = isHidden ? '#1565c0' : '#aaa';
+		toggle.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+		toggle.setAttribute('aria-label', isHidden ? 'Ukryj PIN' : 'Pokaż PIN');
 	});
 
 	// Krok 3 → final
@@ -208,11 +217,18 @@ document.addEventListener('DOMContentLoaded', () => {
 // ── Collapsible ───────────────────────────────────────────────────────────────
 
 function bindCollapsible(triggerId, bodyId, arrowId) {
+	const trigger = document.getElementById(triggerId);
 	document.getElementById(triggerId).addEventListener('click', () => {
 		const body = document.getElementById(bodyId);
 		const arrow = document.getElementById(arrowId);
 		const open = body.classList.toggle('open');
 		arrow.classList.toggle('open', open);
+		trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+		if (open) {
+			body.removeAttribute('inert');
+		} else {
+			body.setAttribute('inert', '');
+		}
 	});
 }
 
