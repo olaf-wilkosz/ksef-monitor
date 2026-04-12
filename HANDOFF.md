@@ -1,6 +1,6 @@
-# KSeF Monitor – Handoff v1.0.2
+# KSeF Monitor – Handoff v1.0.3
 
-Chrome extension MV3 monitorująca faktury zakupowe w KSeF API 2.0.
+MV3 WebExtension monitorująca faktury zakupowe w KSeF API 2.0. Działa w Chrome i Firefox.
 Repo: `github.com/olaf-wilkosz/ksef-monitor`
 
 ---
@@ -9,7 +9,7 @@ Repo: `github.com/olaf-wilkosz/ksef-monitor`
 
 ```
 ksef-monitor/
-├── extension/          ← ZIP z tego folderu → upload do Chrome Web Store
+├── extension/          ← źródło; Chrome: ZIP z tego folderu; Firefox: przez build-firefox.mjs
 │   ├── manifest.json
 │   ├── background.js
 │   ├── storage.js
@@ -24,18 +24,31 @@ ksef-monitor/
 │   └── screenshots/    (slide-1..5.html + screenshot-1..5.png + promo-440x280 + promo-1400x560)
 ├── docs/               ← GitHub Pages
 │   └── privacy-policy.html
+├── build-firefox.mjs   ← buduje dist-firefox/ + ZIP dla Firefox (esbuild bundle)
+├── package.json        ← devDependencies: esbuild, archiver
+├── pnpm-lock.yaml
 ├── .gitattributes      ← LF normalizacja
+├── .gitignore
 ├── README.md
-├── HANDOFF.md
-└── .gitignore
+└── HANDOFF.md
 ```
 
-ZIP do Store:
+Budowanie ZIP Chrome:
 
 ```bash
 cd extension
-zip -r ../ksef-monitor-1.0.2.zip . --exclude="*.DS_Store"
+zip -r ../ksef-monitor-{version}-chrome.zip . --exclude="*.DS_Store"
 ```
+
+Budowanie ZIP Firefox:
+
+```bash
+pnpm install
+node build-firefox.mjs
+# → ksef-monitor-{version}-firefox.zip
+```
+
+Oba ZIP-y buduje automatycznie GitHub Actions przy pushu taga `v*`.
 
 ---
 
@@ -51,9 +64,9 @@ zip -r ../ksef-monitor-1.0.2.zip . --exclude="*.DS_Store"
 | `onboarding.html` | HTML kreatora                                               |
 | `ksef-api.js`     | Klient KSeF API 2.0 (auth + query)                          |
 | `crypto-utils.js` | AES-256-GCM, RSA-OAEP, PBKDF2 (ES module)                   |
-| `manifest.json`   | MV3, permissions, ikony, version                            |
+| `manifest.json`   | MV3, permissions, ikony, version, gecko.id                  |
 
-Uwaga: `onboarding.html` używa `type="module"` i importuje `encryptToken` bezpośrednio z `crypto-utils.js`.
+Uwaga: `onboarding.html` używa `type="module"` i importuje `encryptToken` bezpośrednio z `crypto-utils.js`. Firefox bundle spłaszcza tylko `background.js` – pozostałe pliki trafiają do `dist-firefox/` bez zmian.
 
 ---
 
@@ -75,7 +88,7 @@ Uwaga: `onboarding.html` używa `type="module"` i importuje `encryptToken` bezpo
     - refreshToken przekazywany w nagłówku `Authorization: Bearer <token>` (nie w body!)
     - Odpowiedź: `{accessToken: {token, validUntil}}` – **brak nowego refreshToken, zostaje ten sam**
 - Faktury: `POST /invoices/query/metadata`
-- Kluczowe pola faktury: `ksefNumber`, `invoiceNumber`, `issueDate`, `seller.name`, `seller.nip`, `grossAmount`, `currency`
+- Kluczowe pola faktury (zweryfikowane na produkcji): `ksefNumber`, `invoiceReferenceNumber`, `invoicingDate`, `seller.name`, `seller.nip`, `grossAmount`, `currency`
 
 ### Czasy życia tokenów (zweryfikowane na produkcji)
 
@@ -87,7 +100,7 @@ Uwaga: `onboarding.html` używa `type="module"` i importuje `encryptToken` bezpo
 ### Storage schema
 
 ```js
-// chrome.storage.local
+// chrome.storage.local (browser.storage.local w Firefox)
 config: {
   nip:                  string,
   companyName:          string | null,
@@ -116,9 +129,9 @@ pollState: {
 }
 
 invoiceState: {
-  allSeenIds:       string[],   // rośnie bez limitu – patrz backlog
-  pendingInvoices:  Invoice[],
-  recentArchive:    Invoice[],  // maks. 5
+  allSeenIds:       string[],   // rośnie bez limitu – deduplikacja przy pollu
+  pendingInvoices:  Invoice[],  // wszystkie nieprzejrzane; renderowane po 10 z "Pokaż kolejne"
+  recentArchive:    Invoice[],  // przejrzane; TTL 90 dni, bez limitu ilościowego
   lastQueryTime:    string | null,
 }
 
@@ -140,7 +153,7 @@ errorLog: Array<{ time: string, code: string, message: string }>  // maks. 50
 ```
 
 ```js
-// Invoice (znormalizowana)
+// Invoice (znormalizowana – pola zweryfikowane na produkcji)
 {
   id: string, ksefRef: string, invoiceNumber: string,
   issueDate: string, sellerName: string, sellerNip: string,
@@ -157,18 +170,19 @@ errorLog: Array<{ time: string, code: string, message: string }>  // maks. 50
 
 ### Kluczowe decyzje projektowe
 
-- **UI-lock (4h)** → popup wymaga PIN po 4h braku aktywności; weryfikuje kryptograficznie przez `VERIFY_PIN` w background (od v1.0.2 – wcześniej dowolny PIN przechodził gdy refresh token był ważny)
+- **UI-lock (4h)** → popup wymaga PIN po 4h braku aktywności; weryfikuje kryptograficznie przez `VERIFY_PIN` w background
 - **PIN lockout** → 5 błędnych prób → 30s blokada z odliczaniem; reset po sukcesie lub wygaśnięciu
-- **`clearAuthState` NIE jest wywoływane przy AUTH_REQUIRED** → refreshToken musi przeżyć błędne próby PIN i restart przeglądarki; czyścimy tylko przy HTTP 450 i świadomej zmianie tokenu
-- **`CLEAR_BACKOFF` NIE jest wysyłane przed `POLL_NOW`** przy crypto-lock → kasowałoby `needsPin` zanim poll dostanie szansę użyć PINu przez właściwą ścieżkę
-- **`POLL_NOW` zwraca realny status** → `{ok: !needsPin && !needsNewToken}` po pollu, nie zawsze `ok: true`
+- **`clearAuthState` NIE jest wywoływane przy AUTH_REQUIRED** → refreshToken musi przeżyć błędne próby PIN
+- **`CLEAR_BACKOFF` NIE jest wysyłane przed `POLL_NOW`** przy crypto-lock → kasowałoby `needsPin`
+- **`POLL_NOW` zwraca realny status** → `{ok: !needsPin && !needsNewToken}` po pollu
 - **needsNewToken=true** → HTTP 450, token unieważniony, viewNewToken
-- **Retry przy refresh** → tylko błędy sieci i 5xx; 401/403 jest finalne (nie retryujemy)
+- **Retry przy refresh** → tylko błędy sieci i 5xx; 401/403 jest finalne
 - **Rate limit 429** → backoff + RESTORE_ALARM (nie setTimeout – SW może zasnąć)
 - **NIP** → zawsze wyciągany z tokenu (`|nip-XXXXXXXXXX|`), pole readonly
 - **Walidacja tokenu** → regex oparty na jednej próbce JDG; format dla spółek/pieczęci nieznany
 - **onboarding jako popup window** → `chrome.windows.create`, prawy górny róg okna przeglądarki
 - **Kolory KSeF** → `#dc0032` czerwień, `#013f71` granat
+- **Firefox background** → bundlowany przez esbuild (IIFE) bo FF MV3 nie obsługuje ES modules w SW
 
 ### Widoki popup
 
@@ -176,7 +190,7 @@ errorLog: Array<{ time: string, code: string, message: string }>  // maks. 50
 viewSetup      – brak tokenu (pierwszy raz lub po clearAll)
 viewPin        – PIN (needsPin=true lub UI-lock 4h)
 viewNewToken   – nowy token (HTTP 450: token unieważniony)
-viewMain       – lista faktur
+viewMain       – lista faktur z paginacją (10 na start, "Pokaż kolejne")
 viewSettings   – konfiguracja
 viewError      – błąd krytyczny (PRD)
 viewLogs       – log błędów
@@ -184,50 +198,70 @@ viewLogs       – log błędów
 
 ---
 
-## Chrome Web Store
+## Stores
+
+### Chrome Web Store
 
 - Konto: ksef-monitor@pm.me (devconsole)
 - Store URL: https://chromewebstore.google.com/detail/ksef-monitor/adfieckbhbajegaomloplmkiimcgamgk
+- Status: v1.0.2 opublikowane
+
+### Firefox Add-on Store (AMO)
+
+- Konto: konto Mozilla (addons.mozilla.org)
+- Store URL: https://addons.mozilla.org/pl/firefox/addon/ksef-monitor/
+- gecko.id: `ksef-monitor@pm.me`
+- strict_min_version: 140.0
+- Status: v1.0.2 w weryfikacji
+- Uwaga: polityka prywatności wklejona inline w panelu AMO – aktualizować ręcznie przy zmianach
+
+### Materiały wspólne
+
 - Privacy policy: https://olaf-wilkosz.github.io/ksef-monitor/privacy-policy.html
-- Status: v1.0.1 opublikowane (21.03.2026), v1.0.2 w przygotowaniu
-- Materiały: `store/listing.md` (opisy PL+EN), `store/screenshots/` (5 screenshotów + 2 banery)
+- Screenshoty: `store/screenshots/` (5 screenshotów + 2 banery)
 
 ---
 
 ## Backlog
 
-### 🔴 Przed releasem 1.0.2
+### 🔴 Aktywne
 
-- Zbumpować `manifest.json` do `1.0.2`
+- Multi-NIP – priorytet po 1.0.3; wymaga refaktoru storage, polling loop i popup UI
 
 ### 🟡 Polish
 
-- Sticky nagłówki sekcji w liście faktur (przy 20+ fakturach)
-- Date range picker dla progu „oczekujących" (cross-platform, bez native `<input type="date">`)
-- ARIA: `confirmModal` bez `role="dialog"`, `aria-modal="true"` i focus trap przy nawigacji klawiaturą
+- Date range picker dla progu „oczekujących" (cross-platform)
+- Wskaźnik dostępności KSeF w UI (aktualnie błędy tylko w logach)
 
 ### 🟡 Techniczny
 
-- `allSeenIds` pruning – rośnie bez ograniczeń; przy 500+ faktur/rok zacznie wpływać na performance `updateInvoices` (liniowe po rozmiarze kolekcji)
 - Weryfikacja regex tokenu na tokenach spółek/pieczęć elektroniczna (format zweryfikowany tylko na 1 próbce JDG)
 
-### 🔴 Post-1.0
+### 💰 Monetyzacja
 
-- Firefox port (Zen Browser jako cel testowy; różnice `browser.*` vs `chrome.*`, SW lifecycle)
-- Multi-firma/NIP
-- Monetyzacja (Ko-fi / GitHub Sponsors)
+- Ko-fi / GitHub Sponsors – przyjmujemy datki, warto skonfigurować przed wzrostem bazy użytkowników
 
 ---
 
 ## Jak testować
 
+### Chrome / Brave
+
 1. `chrome://extensions` → Tryb dewelopera → Załaduj rozpakowane → wskaż `extension/`
 2. Po zmianie kodu: kliknij 🔄 na karcie rozszerzenia
-3. Logi SW: kliknij „Service Worker" w `chrome://extensions` – konsola musi być otwarta zanim wykonasz akcję
+3. Logi SW: kliknij „Service Worker" w `chrome://extensions`
 4. Logi popup: kliknij prawym na ikonę rozszerzenia → Zbadaj
-5. **Test UI-lock** (konsola SW):
+
+### Firefox / Zen Browser
+
+1. `about:debugging` → "Ten Firefox" → "Załaduj tymczasowy dodatek" → wskaż `dist-firefox/manifest.json`
+2. Po zmianie kodu: `node build-firefox.mjs` → kliknij 🔄 w `about:debugging`
+3. Logi SW: kliknij „Zbadaj" przy rozszerzeniu
+
+### Testy manualne
 
 ```js
+// Test UI-lock (konsola SW):
 chrome.storage.local.set({
 	pollState: {
 		lastSuccessTime: new Date(Date.now() - 5 * 3600000).toISOString(),
@@ -238,18 +272,14 @@ chrome.storage.local.set({
 		lastError: null,
 	},
 });
-```
 
-6. **Test PIN lockout**: wpisz 5 błędnych PINów → 30s blokada z odliczaniem
-7. **Test refresh tokenu** (konsola SW po zalogowaniu):
+// Test PIN lockout: wpisz 5 błędnych PINów → 30s blokada z odliczaniem
 
-```js
+// Test refresh tokenu (konsola SW po zalogowaniu):
 const s = await chrome.storage.session.get('accessTokenState');
 s.accessTokenState.accessTokenExpiry = Date.now() - 1000;
 await chrome.storage.session.set(s);
 ```
-
-Następnie "Sprawdź teraz" – powinno odświeżyć bez PINu, badge powinien zostać.
 
 ## Jak zacząć nową sesję
 
