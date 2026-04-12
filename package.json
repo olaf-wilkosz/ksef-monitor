@@ -1,0 +1,13 @@
+{
+	"name": "ksef-monitor",
+	"version": "1.0.2",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"build:firefox": "node build-firefox.mjs"
+	},
+	"devDependencies": {
+		"archiver": "^7.0.1",
+		"esbuild": "^0.25.0"
+	}
+}
