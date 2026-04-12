@@ -3,6 +3,12 @@
 	"name": "KSeF Monitor",
 	"version": "1.0.2",
 	"description": "Powiadomienia o nowych fakturach w Krajowym Systemie e-Faktur (KSeF API 2.0)",
+	"browser_specific_settings": {
+		"gecko": {
+			"id": "ksef-monitor@pm.me",
+			"strict_min_version": "128.0"
+		}
+	},
 	"permissions": ["alarms", "storage", "notifications"],
 	"host_permissions": [
 		"https://api.ksef.mf.gov.pl/*",
