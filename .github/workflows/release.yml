@@ -42,6 +42,10 @@ jobs:
             - name: Zbuduj ZIP Firefox
               run: node build-firefox.mjs
 
+            - name: Zbuduj archiwum źródeł (dla AMO)
+              run: |
+                  git archive --format=zip --output=ksef-monitor-source.zip HEAD
+
             - name: Utwórz GitHub Release
               uses: softprops/action-gh-release@v2
               with:
@@ -50,3 +54,16 @@ jobs:
                       ksef-monitor-${{ steps.version.outputs.version }}-chrome.zip
                       ksef-monitor-${{ steps.version.outputs.version }}-firefox.zip
                   generate_release_notes: true
+
+            - name: Opublikuj na AMO (Firefox)
+              run: |
+                  pnpm dlx web-ext sign \
+                    --source-dir dist-firefox \
+                    --channel listed \
+                    --api-key ${{ secrets.AMO_ISSUER }} \
+                    --api-secret ${{ secrets.AMO_SECRET }} \
+                    --upload-source-code ksef-monitor-source.zip \
+                    --no-input
+              continue-on-error: true
+              # continue-on-error: AMO sign może trwać długo lub wymagać ręcznej recenzji
+              # błąd tutaj nie blokuje tworzenia GitHub Release
