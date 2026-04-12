@@ -1,34 +1,47 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+    push:
+        tags:
+            - "v*"
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    release:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
 
-      - name: Odczytaj wersję z manifest.json
-        id: version
-        run: |
-          VERSION=$(jq -r '.version' extension/manifest.json)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "22"
 
-      - name: Zbuduj ZIP
-        run: |
-          cd extension
-          zip -r ../ksef-monitor-${{ steps.version.outputs.version }}.zip . --exclude="*.DS_Store"
+            - name: Install dependencies
+              run: npm ci
 
-      - name: Utwórz GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: "KSeF Monitor v${{ steps.version.outputs.version }}"
-          files: ksef-monitor-${{ steps.version.outputs.version }}.zip
-          generate_release_notes: true
+            - name: Odczytaj wersję z manifest.json
+              id: version
+              run: |
+                  VERSION=$(jq -r '.version' extension/manifest.json)
+                  echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+            - name: Zbuduj ZIP Chrome
+              run: |
+                  cd extension
+                  zip -r ../ksef-monitor-${{ steps.version.outputs.version }}-chrome.zip . --exclude="*.DS_Store"
+
+            - name: Zbuduj ZIP Firefox
+              run: node build-firefox.mjs
+
+            - name: Utwórz GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  name: "KSeF Monitor v${{ steps.version.outputs.version }}"
+                  files: |
+                      ksef-monitor-${{ steps.version.outputs.version }}-chrome.zip
+                      ksef-monitor-${{ steps.version.outputs.version }}-firefox.zip
+                  generate_release_notes: true
