@@ -368,6 +368,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 								environment: account.environment,
 								pendingCount: account.invoiceState?.pendingInvoices?.length ?? 0,
 								pollState: account.pollState,
+								authState: account.authState,
+								invoiceState: account.invoiceState ?? {
+									allSeenIds: [],
+									pendingInvoices: [],
+									recentArchive: [],
+									lastQueryTime: null,
+								},
 							};
 						})
 					);

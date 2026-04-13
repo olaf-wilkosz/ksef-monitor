@@ -68,8 +68,24 @@ async function loadState() {
 		accounts = response.accounts ?? [];
 		activeNip = response.activeNip ?? accounts[0]?.nip ?? null;
 	} else {
-		accounts = [];
-		activeNip = null;
+		// Fallback: SW nie żyje jeszcze (zimny start) – czytaj bezpośrednio z storage
+		const raw = await chrome.storage.local.get(['accounts', 'activeNip']);
+		const storedAccounts = raw.accounts ?? {};
+		accounts = Object.entries(storedAccounts).map(([nip, account]) => ({
+			nip,
+			companyName: account.companyName,
+			environment: account.environment,
+			pendingCount: account.invoiceState?.pendingInvoices?.length ?? 0,
+			pollState: account.pollState ?? {},
+			authState: account.authState ?? {},
+			invoiceState: account.invoiceState ?? {
+				allSeenIds: [],
+				pendingInvoices: [],
+				recentArchive: [],
+				lastQueryTime: null,
+			},
+		}));
+		activeNip = raw.activeNip ?? accounts[0]?.nip ?? null;
 	}
 
 	// envLabel w headerze: środowisko aktywnego konta
@@ -1164,6 +1180,10 @@ function showSettingsView() {
 
 	// Lista NIP-ów z przyciskami usuwania
 	renderNipList();
+
+	// "Usuń token" jest redundantny gdy lista NIP-ów jest widoczna (ma własne "X")
+	const btnRemove = document.getElementById('btnRemoveToken');
+	if (btnRemove) btnRemove.style.display = accounts.length > 0 ? 'none' : '';
 
 	showView('viewSettings');
 }
