@@ -775,6 +775,7 @@ function bindEvents() {
 			height: H,
 			left,
 			top,
+			focused: true,
 		});
 	});
 	document.getElementById('btnErrorBack').addEventListener('click', determineAndShowView);
