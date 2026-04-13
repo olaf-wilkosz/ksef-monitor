@@ -1,34 +1,47 @@
 /**
  * popup.js – logika interfejsu popup
  *
- * Stan faktur:
- *   pendingInvoices  – nowe, nieprzejrzane (czarne, bold, z checkboxem)
- *   recentArchive    – ostatnio przejrzane (szare, TTL 90 dni)
+ * Stan faktur (v1.1 multi-NIP):
+ *   accounts    – lista kont z pollState i invoiceState per NIP
+ *   activeNip   – aktywny NIP (wybrany przez użytkownika)
+ *   config      – globalna konfiguracja (interwał, powiadomienia, threshold)
  *
- * Renderowanie: pierwsze 10 pending/archive, przyciski "Pokaż kolejne"
- * Licznik + badge = pendingInvoices.length
+ * Renderowanie: NipSelector u góry viewMain, lista faktur dla activeNip
+ * Badge = zagregowana liczba pending ze wszystkich NIP-ów
  */
 
 // ─── Stan ─────────────────────────────────────────────────────────────────────
 
 let config = {};
-let pollState = {};
-let invoiceState = { allSeenIds: [], pendingInvoices: [], recentArchive: [], lastQueryTime: null };
+let accounts = []; // [{ nip, companyName, environment, pendingCount, pollState }]
+let activeNip = null;
 
-// Toast – timer i aktywne cofnięcie
+// Skróty do danych aktywnego konta
+const activeAccount = () => accounts.find((a) => a.nip === activeNip) ?? null;
+const activeInvoices = () => activeAccount()?.invoiceState ?? { pendingInvoices: [], recentArchive: [] };
+const activePollState = () => activeAccount()?.pollState ?? {};
+
+// Toast
 let toastTimer = null;
 let toastInvoiceId = null;
-let toastInvoiceType = null; // "pending" | "archive" | "bulk"
-let toastBulkSnapshot = null; // snapshot pending[] dla undo "oznacz wszystkie"
+let toastInvoiceType = null;
+let toastBulkSnapshot = null;
 
 // Reaguj na zmiany storage gdy popup jest otwarty
-// (np. sesja wygasa podczas gdy popup jest widoczny)
-chrome.storage.onChanged.addListener((changes, area) => {
+chrome.storage.onChanged.addListener(async (changes, area) => {
 	if (area !== 'local') return;
-	if (changes.pollState?.newValue?.needsNewToken) {
-		showView('viewNewToken');
-	} else if (changes.pollState?.newValue?.needsPin) {
-		showView('viewPin');
+	if (changes.accounts) {
+		await loadState();
+		const ps = activePollState();
+		if (ps.needsNewToken) {
+			showView('viewNewToken');
+			return;
+		}
+		if (ps.needsPin) {
+			showView('viewPin');
+			return;
+		}
+		renderMainView();
 	}
 });
 
@@ -41,83 +54,70 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function loadState() {
-	const result = await chrome.storage.local.get([
-		'config',
-		'authState',
-		'pollState',
-		'invoiceState',
-		'encryptedToken',
-	]);
-	config = result.config ?? {
-		environment: 'production',
+	// Globalna konfiguracja
+	const cfgResult = await chrome.storage.local.get('config');
+	config = cfgResult.config ?? {
 		pollIntervalMinutes: 60,
 		notificationsEnabled: false,
-		companyName: null,
+		pendingDaysThreshold: 'month',
 	};
-	pollState = result.pollState ?? {};
-	invoiceState = migrateInvoiceState(result.invoiceState);
 
+	// Pobierz podsumowanie wszystkich kont z background
+	const response = await chrome.runtime.sendMessage({ type: 'GET_ACCOUNTS_SUMMARY' }).catch(() => null);
+	if (response?.ok) {
+		accounts = response.accounts ?? [];
+		activeNip = response.activeNip ?? accounts[0]?.nip ?? null;
+	} else {
+		accounts = [];
+		activeNip = null;
+	}
+
+	// envLabel w headerze: środowisko aktywnego konta
+	const env = activeAccount()?.environment ?? 'production';
 	const labels = { production: 'PRD', demo: 'DEMO', test: 'TEST' };
-	document.getElementById('envLabel').textContent = labels[config.environment] ?? 'PRD';
-}
-
-/** Migracja starszego schematu – bezpieczna fallback. */
-function migrateInvoiceState(raw) {
-	if (!raw) return { allSeenIds: [], pendingInvoices: [], recentArchive: [], lastQueryTime: null };
-	if (raw.allSeenIds !== undefined) return raw; // v0.3 – OK
-	// v0.2.0 / v0.1.x
-	return {
-		allSeenIds: raw.lastSeenIds ?? [],
-		pendingInvoices: raw.pendingInvoices ?? [],
-		recentArchive: [],
-		lastQueryTime: raw.lastQueryTime ?? null,
-	};
+	document.getElementById('envLabel').textContent = labels[env] ?? 'PRD';
 }
 
 // ─── Routing ──────────────────────────────────────────────────────────────────
 
 // UI-lock (nie crypto-lock): po 4h bezczynności popup wymaga PIN zanim pokaże dane.
-// Background nadal polluje przez refresh token – PIN nie jest weryfikowany kryptograficznie.
-// Pełna weryfikacja kryptograficzna następuje dopiero gdy background ustawi needsPin=true
-// (wygaśnięcie refresh tokena ~7 dni). To jest świadoma decyzja projektowa.
+// Background nadal polluje przez refresh token – weryfikacja kryptograficzna przez VERIFY_PIN.
 const PIN_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 
 function determineAndShowView() {
-	chrome.storage.local.get(['encryptedToken', 'authState', 'pollState'], (result) => {
-		const hasToken = !!result.encryptedToken;
-		const auth = result.authState ?? {};
-		const ps = result.pollState ?? {};
+	if (accounts.length === 0) {
+		showView('viewSetup');
+		return;
+	}
 
-		if (!hasToken) {
-			showView('viewSetup');
-			return;
-		}
-		if (ps.needsNewToken) {
-			showView('viewNewToken');
-			return;
-		}
-		if (ps.needsPin) {
-			showView('viewPin');
-			return;
-		}
+	const ps = activePollState();
 
-		// Nieaktywność > 4h (np. po uśpieniu) → wymagaj PIN zanim pokażemy dane
-		const lastSuccess = ps.lastSuccessTime ? new Date(ps.lastSuccessTime).getTime() : 0;
-		if (lastSuccess && Date.now() - lastSuccess > PIN_TIMEOUT_MS) {
-			showView('viewPin');
-			return;
-		}
+	if (ps.needsNewToken) {
+		showView('viewNewToken');
+		return;
+	}
+	if (ps.needsPin) {
+		showView('viewPin');
+		return;
+	}
 
-		// accessToken jest w session storage (od v1.0.2) – sprawdzamy tylko refreshToken w local
-		const validRefresh = auth.refreshToken && auth.refreshTokenExpiry > Date.now() + 30_000;
-		if (!validRefresh && !lastSuccess) {
-			showView('viewPin');
-			return;
-		}
+	// Nieaktywność > 4h → wymagaj PIN zanim pokażemy dane
+	const lastSuccess = ps.lastSuccessTime ? new Date(ps.lastSuccessTime).getTime() : 0;
+	if (lastSuccess && Date.now() - lastSuccess > PIN_TIMEOUT_MS) {
+		showView('viewPin');
+		return;
+	}
 
-		renderMainView();
-		showView('viewMain');
-	});
+	// accessToken jest w session storage – sprawdzamy tylko refreshToken
+	const authState = activeAccount()?.authState ?? {};
+	const validRefresh = authState.refreshToken && authState.refreshTokenExpiry > Date.now() + 30_000;
+	if (!validRefresh && !lastSuccess) {
+		showView('viewPin');
+		return;
+	}
+
+	renderMainView();
+	showView('viewMain');
 }
 
 function showView(id) {
@@ -145,15 +145,23 @@ function showView(id) {
 // ─── Widok główny ─────────────────────────────────────────────────────────────
 
 function renderMainView() {
-	const pending = invoiceState.pendingInvoices ?? [];
-	const archive = invoiceState.recentArchive ?? [];
+	const account = activeAccount();
+	const inv = activeInvoices();
+	const ps = activePollState();
+	const pending = inv.pendingInvoices ?? [];
+	const archive = inv.recentArchive ?? [];
 	const count = pending.length;
 
+	// NipSelector
+	renderNipSelector();
+
+	// Licznik
 	const countEl = document.getElementById('invoiceCount');
 	countEl.textContent = count;
 	countEl.className = 'counter-num' + (count === 0 ? ' zero' : '');
 
-	const qt = pollState.lastSuccessTime;
+	// Czas ostatniego sprawdzenia
+	const qt = ps.lastSuccessTime;
 	document.getElementById('lastCheck').textContent = qt
 		? 'Sprawdzono ' +
 			new Date(qt).toLocaleString('pl-PL', {
@@ -164,25 +172,87 @@ function renderMainView() {
 			})
 		: 'Nigdy nie sprawdzono';
 
+	// envLabel – środowisko aktywnego konta
+	const labels = { production: 'PRD', demo: 'DEMO', test: 'TEST' };
+	document.getElementById('envLabel').textContent = labels[account?.environment ?? 'production'] ?? 'PRD';
+
 	renderStatusBadge();
 	renderInvoiceList(pending, archive);
 }
 
+// ─── NipSelector ─────────────────────────────────────────────────────────────
+
+function renderNipSelector() {
+	const container = document.getElementById('nipSelector');
+	if (!container) return;
+
+	// Ukryj selector jeśli tylko jeden NIP
+	if (accounts.length <= 1) {
+		container.style.display = 'none';
+		return;
+	}
+
+	container.style.display = 'flex';
+	container.innerHTML = '';
+
+	if (accounts.length === 2) {
+		// Dwa NIP-y → dwa przyciski side by side
+		accounts.forEach((account) => {
+			const btn = document.createElement('button');
+			btn.className = 'nip-btn' + (account.nip === activeNip ? ' active' : '');
+			const label = account.companyName ? trunc(account.companyName, 14) : 'NIP ' + account.nip.slice(-4);
+			const badge = account.pendingCount > 0 ? ` <span class="nip-badge">${account.pendingCount}</span>` : '';
+			btn.innerHTML = escHtml(label) + badge;
+			btn.setAttribute('aria-label', `${label}, ${account.pendingCount} nowych`);
+			btn.addEventListener('click', () => switchNip(account.nip));
+			container.appendChild(btn);
+		});
+	} else {
+		// 3+ NIP-ów → dropdown
+		const select = document.createElement('select');
+		select.className = 'nip-select';
+		select.setAttribute('aria-label', 'Wybierz NIP');
+		accounts.forEach((account) => {
+			const opt = document.createElement('option');
+			opt.value = account.nip;
+			const label = account.companyName
+				? `${trunc(account.companyName, 20)} (${account.nip})`
+				: `NIP ${account.nip}`;
+			opt.textContent = account.pendingCount > 0 ? `${label} · ${account.pendingCount} nowych` : label;
+			if (account.nip === activeNip) opt.selected = true;
+			select.appendChild(opt);
+		});
+		select.addEventListener('change', () => switchNip(select.value));
+		container.appendChild(select);
+	}
+}
+
+async function switchNip(nip) {
+	activeNip = nip;
+	await chrome.runtime.sendMessage({ type: 'SET_ACTIVE_NIP', nip });
+	renderedPendingCount = RENDER_PAGE;
+	renderedArchiveCount = RENDER_PAGE;
+	renderMainView();
+}
+
+// ─── Status badge ─────────────────────────────────────────────────────────────
+
 function renderStatusBadge() {
 	const el = document.getElementById('pollStatus');
+	const ps = activePollState();
 	el.classList.remove('clickable', 's-ok', 's-warn', 's-err', 's-pin');
 
-	if (pollState.needsPin) {
+	if (ps.needsPin) {
 		el.textContent = 'Wymagany PIN →';
 		el.classList.add('s-pin', 'clickable');
 		el.onclick = () => showView('viewPin');
-	} else if (pollState.backoffUntil && new Date(pollState.backoffUntil) > new Date()) {
-		const min = Math.ceil((new Date(pollState.backoffUntil) - Date.now()) / 60000);
+	} else if (ps.backoffUntil && new Date(ps.backoffUntil) > new Date()) {
+		const min = Math.ceil((new Date(ps.backoffUntil) - Date.now()) / 60000);
 		el.textContent = `Backoff (${min} min)`;
 		el.classList.add('s-warn');
 		el.onclick = null;
-	} else if ((pollState.consecutiveErrors ?? 0) > 0) {
-		el.textContent = `Błąd (${pollState.consecutiveErrors}×)`;
+	} else if ((ps.consecutiveErrors ?? 0) > 0) {
+		el.textContent = `Błąd (${ps.consecutiveErrors}×)`;
 		el.classList.add('s-err');
 		el.onclick = null;
 	} else {
@@ -300,7 +370,8 @@ function renderInvoiceList(pending, archive) {
 			btnMore.textContent = `Pokaż kolejne ${Math.min(RENDER_PAGE, remaining)} nowe (${remaining} oczekujących)`;
 			btnMore.addEventListener('click', () => {
 				renderedPendingCount += RENDER_PAGE;
-				renderInvoiceList(invoiceState.pendingInvoices ?? [], invoiceState.recentArchive ?? []);
+				const inv = activeInvoices();
+				renderInvoiceList(inv.pendingInvoices ?? [], inv.recentArchive ?? []);
 			});
 			actionsRow.appendChild(btnMore);
 		}
@@ -309,11 +380,16 @@ function renderInvoiceList(pending, archive) {
 		btnAll.className = 'btn-section-action btn-section-action--all';
 		btnAll.textContent = `Oznacz wszystkie ${sorted.length} nowe jako przejrzane`;
 		btnAll.addEventListener('click', async () => {
-			const snapshot = [...(invoiceState.pendingInvoices ?? [])];
+			const snapshot = [...(activeInvoices().pendingInvoices ?? [])];
 			if (snapshot.length === 0) return;
-			await chrome.runtime.sendMessage({ type: 'MARK_ALL_NOTICED' });
-			invoiceState.recentArchive = [...snapshot, ...(invoiceState.recentArchive ?? [])];
-			invoiceState.pendingInvoices = [];
+			await chrome.runtime.sendMessage({ type: 'MARK_ALL_NOTICED', nip: activeNip });
+			// Aktualizuj lokalny stan konta
+			const acc = activeAccount();
+			if (acc) {
+				acc.invoiceState.recentArchive = [...snapshot, ...(acc.invoiceState.recentArchive ?? [])];
+				acc.invoiceState.pendingInvoices = [];
+				acc.pendingCount = 0;
+			}
 			renderedPendingCount = RENDER_PAGE;
 			renderMainView();
 			showBulkToast(snapshot);
@@ -357,7 +433,8 @@ function renderInvoiceList(pending, archive) {
 			btnMore.textContent = `Pokaż kolejne ${Math.min(RENDER_PAGE, remaining)} wcześniejsze (${remaining} pozostałych)`;
 			btnMore.addEventListener('click', () => {
 				renderedArchiveCount += RENDER_PAGE;
-				renderInvoiceList(invoiceState.pendingInvoices ?? [], invoiceState.recentArchive ?? []);
+				const inv = activeInvoices();
+				renderInvoiceList(inv.pendingInvoices ?? [], inv.recentArchive ?? []);
 			});
 			actionsRow.appendChild(btnMore);
 			inner.appendChild(actionsRow);
@@ -393,13 +470,11 @@ function buildInvoiceRow(inv, type) {
 	// Akcje na poziomie meta (wiersz 2, prawa kolumna)
 	const actionsHtml =
 		type === 'pending'
-			? `<div class="inv-actions">
-         <button class="inv-act inv-act-done" title="Oznacz jako przejrzaną">✓</button>
-       </div>`
+			? `<div class="inv-actions"><button class="inv-act inv-act-done" title="Oznacz jako przejrzaną">✓</button></div>`
 			: `<div class="inv-actions">
-         <button class="inv-act inv-act-star" title="Przywróć do nowych">★</button>
-         <button class="inv-act inv-act-hide" title="Ukryj z listy">✕</button>
-       </div>`;
+			<button class="inv-act inv-act-star" title="Przywróć do nowych">★</button>
+			<button class="inv-act inv-act-hide" title="Ukryj z listy">✕</button>
+		   </div>`;
 
 	// Grid: seller + portal (wiersz 1), meta + akcje (wiersz 2)
 	item.innerHTML = `
@@ -414,7 +489,7 @@ function buildInvoiceRow(inv, type) {
 
 	item.querySelector('.inv-portal').addEventListener('click', (e) => {
 		e.stopPropagation();
-		handleOpenInPortal(inv.ksefRef, config.environment);
+		handleOpenInPortal(inv.ksefRef, activeAccount()?.environment ?? 'production');
 	});
 
 	if (type === 'pending') {
@@ -440,17 +515,24 @@ function buildInvoiceRow(inv, type) {
 
 async function handleRestoreToPending(inv, itemEl) {
 	itemEl.classList.add('dismissing');
-	await chrome.runtime.sendMessage({ type: 'UNDO_NOTICED', invoiceId: inv.id });
-	invoiceState.pendingInvoices = [inv, ...(invoiceState.pendingInvoices ?? [])];
-	invoiceState.recentArchive = (invoiceState.recentArchive ?? []).filter((i) => i.id !== inv.id);
+	await chrome.runtime.sendMessage({ type: 'UNDO_NOTICED', invoiceId: inv.id, nip: activeNip });
+	const acc = activeAccount();
+	if (acc) {
+		acc.invoiceState.pendingInvoices = [inv, ...(acc.invoiceState.pendingInvoices ?? [])];
+		acc.invoiceState.recentArchive = (acc.invoiceState.recentArchive ?? []).filter((i) => i.id !== inv.id);
+		acc.pendingCount = acc.invoiceState.pendingInvoices.length;
+	}
 	renderMainView();
 }
 
 async function handleDismissArchive(inv, itemEl) {
 	itemEl.classList.add('dismissing');
-	await chrome.runtime.sendMessage({ type: 'DISMISS_ARCHIVE', invoiceId: inv.id });
-	invoiceState.recentArchive = (invoiceState.recentArchive ?? []).filter((i) => i.id !== inv.id);
-	invoiceState._lastDismissed = inv; // zapamiętaj do undo
+	await chrome.runtime.sendMessage({ type: 'DISMISS_ARCHIVE', invoiceId: inv.id, nip: activeNip });
+	const acc = activeAccount();
+	if (acc) {
+		acc.invoiceState._lastDismissed = inv; // zapamiętaj do undo
+		acc.invoiceState.recentArchive = (acc.invoiceState.recentArchive ?? []).filter((i) => i.id !== inv.id);
+	}
 	renderMainView();
 	showToast(inv, 'archive');
 }
@@ -458,10 +540,14 @@ async function handleDismissArchive(inv, itemEl) {
 async function handleMarkNoticed(inv, itemEl) {
 	// Animacja znikania
 	itemEl.classList.add('dismissing');
-	await chrome.runtime.sendMessage({ type: 'MARK_NOTICED', invoiceId: inv.id });
+	await chrome.runtime.sendMessage({ type: 'MARK_NOTICED', invoiceId: inv.id, nip: activeNip });
 	// Aktualizuj lokalny stan
-	invoiceState.pendingInvoices = (invoiceState.pendingInvoices ?? []).filter((i) => i.id !== inv.id);
-	invoiceState.recentArchive = [inv, ...(invoiceState.recentArchive ?? [])];
+	const acc = activeAccount();
+	if (acc) {
+		acc.invoiceState.pendingInvoices = (acc.invoiceState.pendingInvoices ?? []).filter((i) => i.id !== inv.id);
+		acc.invoiceState.recentArchive = [inv, ...(acc.invoiceState.recentArchive ?? [])];
+		acc.pendingCount = acc.invoiceState.pendingInvoices.length;
+	}
 	renderMainView();
 	showToast(inv);
 }
@@ -527,29 +613,40 @@ async function handleUndoNoticed() {
 
 	if (type === 'bulk') {
 		// Przywróć wszystkie z powrotem do pending
-		await chrome.runtime.sendMessage({ type: 'UNDO_MARK_ALL', invoices: snapshot });
-		invoiceState.pendingInvoices = [...(snapshot ?? []), ...(invoiceState.pendingInvoices ?? [])];
-		invoiceState.recentArchive = (invoiceState.recentArchive ?? []).filter(
-			(inv) => !(snapshot ?? []).find((s) => s.id === inv.id)
-		);
-	} else if (type === 'archive') {
-		await chrome.runtime.sendMessage({ type: 'UNDO_DISMISS_ARCHIVE', invoiceId: id });
-		const restored = invoiceState._lastDismissed;
-		if (restored) {
-			invoiceState.recentArchive = [restored, ...(invoiceState.recentArchive ?? [])].sort((a, b) =>
-				(b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || '')
+		await chrome.runtime.sendMessage({ type: 'UNDO_MARK_ALL', invoices: snapshot, nip: activeNip });
+		const acc = activeAccount();
+		if (acc) {
+			acc.invoiceState.pendingInvoices = [...(snapshot ?? []), ...(acc.invoiceState.pendingInvoices ?? [])];
+			acc.invoiceState.recentArchive = (acc.invoiceState.recentArchive ?? []).filter(
+				(inv) => !(snapshot ?? []).find((s) => s.id === inv.id)
 			);
-			delete invoiceState._lastDismissed;
-		} else {
-			await loadState();
+			acc.pendingCount = acc.invoiceState.pendingInvoices.length;
+		}
+	} else if (type === 'archive') {
+		await chrome.runtime.sendMessage({ type: 'UNDO_DISMISS_ARCHIVE', invoiceId: id, nip: activeNip });
+		const acc = activeAccount();
+		if (acc) {
+			const restored = acc.invoiceState._lastDismissed;
+			if (restored) {
+				acc.invoiceState.recentArchive = [restored, ...(acc.invoiceState.recentArchive ?? [])].sort((a, b) =>
+					(b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || '')
+				);
+				delete acc.invoiceState._lastDismissed;
+			} else {
+				await loadState();
+			}
 		}
 	} else {
 		// pending → przywróć z archiwum
-		await chrome.runtime.sendMessage({ type: 'UNDO_NOTICED', invoiceId: id });
-		const restored = (invoiceState.recentArchive ?? []).find((i) => i.id === id);
-		if (restored) {
-			invoiceState.pendingInvoices = [restored, ...(invoiceState.pendingInvoices ?? [])];
-			invoiceState.recentArchive = (invoiceState.recentArchive ?? []).filter((i) => i.id !== id);
+		await chrome.runtime.sendMessage({ type: 'UNDO_NOTICED', invoiceId: id, nip: activeNip });
+		const acc = activeAccount();
+		if (acc) {
+			const restored = (acc.invoiceState.recentArchive ?? []).find((i) => i.id === id);
+			if (restored) {
+				acc.invoiceState.pendingInvoices = [restored, ...(acc.invoiceState.pendingInvoices ?? [])];
+				acc.invoiceState.recentArchive = (acc.invoiceState.recentArchive ?? []).filter((i) => i.id !== id);
+				acc.pendingCount = acc.invoiceState.pendingInvoices.length;
+			}
 		}
 	}
 
@@ -559,7 +656,7 @@ async function handleUndoNoticed() {
 // ─── Zdarzenia ────────────────────────────────────────────────────────────────
 
 function bindEvents() {
-	// Edycja nazwy firmy w ustawieniach
+	// Edycja nazwy firmy w ustawieniach (per aktywny NIP)
 	const scHint = document.getElementById('settingsCompanyHint');
 	const scInput = document.getElementById('settingsCompanyInput');
 	if (scHint && scInput) {
@@ -571,7 +668,7 @@ function bindEvents() {
 				// ✏️ – odblokuj
 				scInput.readOnly = false;
 				scInput.style.cursor = 'text';
-				scInput.value = config.companyName ?? '';
+				scInput.value = activeAccount()?.companyName ?? '';
 				scInput.focus();
 				scInput.select();
 				scHint.textContent = '✓';
@@ -625,6 +722,7 @@ function bindEvents() {
 			nipInfo.style.display = 'none';
 		}
 	});
+
 	// OTP boxes dla viewPin i viewNewToken
 	initPopupOtp(['pinBox0', 'pinBox1', 'pinBox2', 'pinBox3'], 'pinToggle', handlePinConfirm);
 	initPopupOtp(
@@ -643,6 +741,26 @@ function bindEvents() {
 		showView('viewMain');
 	});
 	document.getElementById('btnRemoveToken').addEventListener('click', handleRemoveToken);
+	document.getElementById('btnAddNip')?.addEventListener('click', async () => {
+		const W = 580,
+			H = 680,
+			MARGIN = 16;
+		let left = 100,
+			top = 60;
+		try {
+			const win = await chrome.windows.getCurrent();
+			left = (win.left ?? 0) + (win.width ?? 1200) - W - MARGIN;
+			top = (win.top ?? 0) + MARGIN;
+		} catch {}
+		chrome.windows.create({
+			url: chrome.runtime.getURL('onboarding.html?mode=add'),
+			type: 'popup',
+			width: W,
+			height: H,
+			left,
+			top,
+		});
+	});
 	document.getElementById('btnErrorBack').addEventListener('click', determineAndShowView);
 	document.getElementById('btnLogsBack').addEventListener('click', determineAndShowView);
 	document.getElementById('btnClearLogs').addEventListener('click', async () => {
@@ -826,9 +944,8 @@ async function handlePinConfirm() {
 	try {
 		// Przy UI-lock (needsPin=false) background akceptuje dowolny PIN przez refresh token.
 		// Weryfikujemy kryptograficznie przed wysłaniem żeby lockout działał poprawnie.
-		const psData = await chrome.storage.local.get('pollState');
-		const needsPin = psData.pollState?.needsPin ?? false;
-		if (!needsPin) {
+		const ps = activePollState();
+		if (!ps.needsPin) {
 			const verifyResponse = await chrome.runtime.sendMessage({ type: 'VERIFY_PIN', pin });
 			if (!verifyResponse.ok) {
 				const attempts = (lockout.attempts ?? 0) + 1;
@@ -847,7 +964,7 @@ async function handlePinConfirm() {
 			}
 		}
 
-		const response = await chrome.runtime.sendMessage({ type: 'POLL_NOW', pin });
+		const response = await chrome.runtime.sendMessage({ type: 'POLL_NOW', pin, nip: activeNip });
 
 		if (response.ok) {
 			await chrome.storage.local.remove('pinLockout');
@@ -920,7 +1037,12 @@ async function handleNewTokenConfirm() {
 	btn.innerHTML = `<div class="spinner"></div> Zapisuję...`;
 
 	try {
-		const response = await chrome.runtime.sendMessage({ type: 'UPDATE_TOKEN', token, pin, nip: nipFromToken });
+		const response = await chrome.runtime.sendMessage({
+			type: 'UPDATE_TOKEN',
+			token,
+			pin,
+			nip: nipFromToken ?? activeNip,
+		});
 		if (response.ok) {
 			document.getElementById('newTokenInput').value = '';
 			['newTokenPinBox0', 'newTokenPinBox1', 'newTokenPinBox2', 'newTokenPinBox3'].forEach((id) => {
@@ -930,8 +1052,8 @@ async function handleNewTokenConfirm() {
 					b.classList.remove('filled');
 				}
 			});
-			await chrome.runtime.sendMessage({ type: 'CLEAR_BACKOFF' });
-			const pollResp = await chrome.runtime.sendMessage({ type: 'POLL_NOW', pin });
+			await chrome.runtime.sendMessage({ type: 'CLEAR_BACKOFF', nip: activeNip });
+			const pollResp = await chrome.runtime.sendMessage({ type: 'POLL_NOW', pin, nip: activeNip });
 			await loadState();
 			if (pollResp.ok) {
 				renderMainView();
@@ -954,10 +1076,10 @@ async function handleCheckNow() {
 	const btn = document.getElementById('btnCheckNow');
 	btn.disabled = true;
 	btn.innerHTML = `<div class="spinner"></div> Sprawdzam...`;
-	await chrome.runtime.sendMessage({ type: 'CLEAR_BACKOFF' }).catch(() => {});
+	await chrome.runtime.sendMessage({ type: 'CLEAR_BACKOFF', nip: activeNip }).catch(() => {});
 
 	try {
-		const response = await chrome.runtime.sendMessage({ type: 'POLL_NOW' });
+		const response = await chrome.runtime.sendMessage({ type: 'POLL_NOW', nip: activeNip });
 		await loadState();
 		if (response.ok) {
 			renderMainView();
@@ -989,7 +1111,7 @@ async function handleReinitArchive() {
 	errEl.textContent = '';
 
 	try {
-		const response = await chrome.runtime.sendMessage({ type: 'REINITIALIZE_ARCHIVE' });
+		const response = await chrome.runtime.sendMessage({ type: 'REINITIALIZE_ARCHIVE', nip: activeNip });
 		if (response.ok) {
 			await loadState();
 			renderMainView();
@@ -1019,34 +1141,81 @@ async function handleReinitArchive() {
 // ─── Ustawienia ───────────────────────────────────────────────────────────────
 
 function showSettingsView() {
+	const account = activeAccount();
 	document.getElementById('selectInterval').value = String(config.pollIntervalMinutes ?? 60);
-	document.getElementById('selectEnv').value = config.environment ?? 'production';
 	document.getElementById('selectPendingDays').value = String(config.pendingDaysThreshold ?? 'month');
 
+	// Środowisko per aktywny NIP
+	const selectEnv = document.getElementById('selectEnv');
+	if (selectEnv) selectEnv.value = account?.environment ?? 'production';
+
+	// Nazwa firmy / NIP per aktywny NIP
 	const companyEl = document.getElementById('settingsCompany');
 	const companyInput = document.getElementById('settingsCompanyInput');
-	if (config.nip) {
-		const label = '🏢 NIP ' + config.nip + (config.companyName ? '  ·  ' + config.companyName : '');
+	if (account?.nip) {
+		const label = '🏢 NIP ' + account.nip + (account.companyName ? '  ·  ' + account.companyName : '');
 		companyInput.value = label;
 		companyEl.style.display = 'block';
 	} else {
 		companyEl.style.display = 'none';
 	}
+
 	document.getElementById('toggleNotifications').checked = !!config.notificationsEnabled;
+
+	// Lista NIP-ów z przyciskami usuwania
+	renderNipList();
+
 	showView('viewSettings');
+}
+
+function renderNipList() {
+	const container = document.getElementById('nipListSettings');
+	if (!container) return;
+	container.innerHTML = '';
+
+	accounts.forEach((account) => {
+		const row = document.createElement('div');
+		row.className = 'nip-list-row';
+
+		const label = document.createElement('span');
+		label.className = 'nip-list-label';
+		label.textContent = account.companyName ? `${account.companyName} (${account.nip})` : `NIP ${account.nip}`;
+		if (account.nip === activeNip) label.style.fontWeight = '600';
+
+		const btnRemove = document.createElement('button');
+		btnRemove.className = 'nip-list-remove';
+		btnRemove.textContent = '✕';
+		btnRemove.setAttribute('aria-label', `Usuń NIP ${account.nip}`);
+		btnRemove.addEventListener('click', () => handleRemoveNip(account.nip));
+
+		row.appendChild(label);
+		row.appendChild(btnRemove);
+		container.appendChild(row);
+	});
 }
 
 async function saveSettingsCompanyName() {
 	const scInput = document.getElementById('settingsCompanyInput');
 	const scHint = document.getElementById('settingsCompanyHint');
 	const newName = scInput.value.trim() || null;
-	config.companyName = newName;
-	await chrome.storage.local.set({ config });
+
+	// Zapisz nazwę firmy per aktywny NIP przez saveAccount w background (przez storage bezpośrednio)
+	const result = await chrome.storage.local.get('accounts');
+	const storedAccounts = result.accounts ?? {};
+	if (activeNip && storedAccounts[activeNip]) {
+		storedAccounts[activeNip].companyName = newName;
+		await chrome.storage.local.set({ accounts: storedAccounts });
+	}
+
+	// Aktualizuj lokalny stan
+	const acc = activeAccount();
+	if (acc) acc.companyName = newName;
+
 	scInput.readOnly = true;
 	scInput.style.cursor = 'default';
 	scHint.textContent = '✏️';
 	// odśwież wyświetlany label (z NIP)
-	const label = '🏢 NIP ' + config.nip + (newName ? '  ·  ' + newName : '');
+	const label = '🏢 NIP ' + activeNip + (newName ? '  ·  ' + newName : '');
 	scInput.value = label;
 }
 
@@ -1056,7 +1225,8 @@ function cancelSettingsCompanyEdit() {
 	scInput.readOnly = true;
 	scInput.style.cursor = 'default';
 	scHint.textContent = '✏️';
-	const label = '🏢 NIP ' + config.nip + (config.companyName ? '  ·  ' + config.companyName : '');
+	const acc = activeAccount();
+	const label = '🏢 NIP ' + activeNip + (acc?.companyName ? '  ·  ' + acc.companyName : '');
 	scInput.value = label;
 }
 
@@ -1064,27 +1234,59 @@ async function handleSaveSettings() {
 	// jeśli nazwa firmy była w trakcie edycji – zapisujemy co jest w polu
 	const scInput = document.getElementById('settingsCompanyInput');
 	if (scInput && !scInput.readOnly) {
-		config.companyName = scInput.value.trim() || null;
-		cancelSettingsCompanyEdit();
+		await saveSettingsCompanyName();
 	}
+
+	// Globalna konfiguracja
 	config.pollIntervalMinutes = parseInt(document.getElementById('selectInterval').value, 10);
-	config.environment = document.getElementById('selectEnv').value;
-	const rawDays = document.getElementById('selectPendingDays').value;
-	config.pendingDaysThreshold = rawDays === 'month' ? 'month' : parseInt(rawDays, 10);
+	config.pendingDaysThreshold = (() => {
+		const v = document.getElementById('selectPendingDays').value;
+		return v === 'month' ? 'month' : parseInt(v, 10);
+	})();
 	config.notificationsEnabled = document.getElementById('toggleNotifications').checked;
 	await chrome.storage.local.set({ config });
 	await chrome.runtime.sendMessage({ type: 'UPDATE_INTERVAL', minutes: config.pollIntervalMinutes });
-	document.getElementById('envLabel').textContent =
-		{ production: 'PRD', demo: 'DEMO', test: 'TEST' }[config.environment] ?? 'PRD';
+
+	// Środowisko per aktywny NIP
+	const newEnv = document.getElementById('selectEnv')?.value ?? 'production';
+	const result = await chrome.storage.local.get('accounts');
+	const storedAccounts = result.accounts ?? {};
+	if (activeNip && storedAccounts[activeNip]) {
+		storedAccounts[activeNip].environment = newEnv;
+		await chrome.storage.local.set({ accounts: storedAccounts });
+	}
+	const acc = activeAccount();
+	if (acc) acc.environment = newEnv;
+
+	const labels = { production: 'PRD', demo: 'DEMO', test: 'TEST' };
+	document.getElementById('envLabel').textContent = labels[newEnv] ?? 'PRD';
+
 	await loadState();
 	renderMainView();
 	showView('viewMain');
 }
 
 async function handleRemoveToken() {
+	// Usuwa aktywny NIP (stara semantyka "usuń token" = usuń aktywne konto)
+	await handleRemoveNip(activeNip);
+}
+
+async function handleRemoveNip(nip) {
+	if (!nip) return;
+
 	const modal = document.getElementById('confirmModal');
 	const btnOk = document.getElementById('confirmOk');
 	const btnCxl = document.getElementById('confirmCancel');
+
+	// Dostosuj tekst modalu
+	const titleEl = document.getElementById('confirmModalTitle');
+	const descEl = modal.querySelector('[style*="margin-bottom: 16px"]');
+	const isLast = accounts.length === 1;
+	if (titleEl) titleEl.textContent = isLast ? 'Usuń token i konfigurację?' : `Usuń NIP ${nip}?`;
+	if (descEl)
+		descEl.textContent = isLast
+			? 'Rozszerzenie przestanie działać. Będziesz musiał przejść onboarding od nowa.'
+			: `Faktury i historia dla NIP ${nip} zostaną usunięte.`;
 
 	modal.style.display = 'flex';
 	btnCxl.focus(); // fokus na "Anuluj" przy otwarciu – bezpieczniejsza opcja domyślna
@@ -1135,16 +1337,22 @@ async function handleRemoveToken() {
 		document.addEventListener('keydown', trapFocus);
 	}).then(async (confirmed) => {
 		if (!confirmed) return;
-		await chrome.storage.local.clear();
-		try {
-			await chrome.action.setBadgeText({ text: '' });
-		} catch {
-			/* ignore */
+
+		const response = await chrome.runtime.sendMessage({ type: 'REMOVE_ACCOUNT', nip });
+		if (response.ok && response.remaining.length === 0) {
+			// Ostatni NIP – wyczyść i wróć do setupu
+			try {
+				await chrome.action.setBadgeText({ text: '' });
+			} catch {}
+			accounts = [];
+			activeNip = null;
+			config = {};
+			showView('viewSetup');
+		} else {
+			await loadState();
+			renderMainView();
+			showView('viewMain');
 		}
-		config = {};
-		pollState = {};
-		invoiceState = { allSeenIds: [], pendingInvoices: [], recentArchive: [], lastQueryTime: null };
-		showView('viewSetup');
 	});
 }
 
@@ -1172,7 +1380,7 @@ function renderLogsList(logs) {
 		entry.className = 'log-entry error';
 		entry.innerHTML = `
       <div class="log-time">${new Date(e.time).toLocaleString('pl-PL')}</div>
-      <div><span class="log-code">${escHtml(e.code ?? 'ERR')}</span></div>
+      <div><span class="log-code">${escHtml(e.code ?? 'ERR')}</span>${e.nip ? ` <span style="color:#888">(${e.nip})</span>` : ''}</div>
       <div class="log-msg">${escHtml(e.message ?? '')}</div>`;
 		listEl.appendChild(entry);
 	});

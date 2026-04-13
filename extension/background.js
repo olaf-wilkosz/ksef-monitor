@@ -16,7 +16,6 @@ import {
 	getConfig,
 	saveConfig,
 	getAccount,
-	saveAccount,
 	addAccount,
 	removeAccount,
 	getNipList,
