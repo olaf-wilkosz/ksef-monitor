@@ -224,6 +224,27 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					break;
 				}
 
+				case 'OPEN_ONBOARDING': {
+					const { mode } = message;
+					const url = chrome.runtime.getURL(`onboarding.html${mode === 'add' ? '?mode=add' : ''}`);
+					const W = 580,
+						H = 680,
+						MARGIN = 16;
+					let left = 100,
+						top = 60;
+					try {
+						const wins = await chrome.windows.getAll({ windowTypes: ['normal'] });
+						const win = wins[0];
+						if (win) {
+							left = (win.left ?? 0) + (win.width ?? 1200) - W - MARGIN;
+							top = (win.top ?? 0) + MARGIN;
+						}
+					} catch {}
+					await chrome.windows.create({ url, type: 'popup', width: W, height: H, left, top, focused: true });
+					sendResponse({ ok: true });
+					break;
+				}
+
 				case 'SET_ACTIVE_NIP': {
 					await setActiveNip(message.nip);
 					sendResponse({ ok: true });

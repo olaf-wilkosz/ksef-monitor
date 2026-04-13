@@ -206,22 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	});
 
 	document.getElementById('btnAddAnother')?.addEventListener('click', () => {
-		// Otwórz nowe okno onboardingu w trybie add
-		const W = 580,
-			H = 680,
-			MARGIN = 16;
-		chrome.windows.getCurrent().then((win) => {
-			const left = (win.left ?? 0) + (win.width ?? 1200) - W - MARGIN;
-			const top = (win.top ?? 0) + MARGIN;
-			chrome.windows.create({
-				url: chrome.runtime.getURL('onboarding.html?mode=add'),
-				type: 'popup',
-				width: W,
-				height: H,
-				left,
-				top,
-			});
-		});
+		chrome.runtime.sendMessage({ type: 'OPEN_ONBOARDING', mode: 'add' });
 		window.close();
 	});
 });

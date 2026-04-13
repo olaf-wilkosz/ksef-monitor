@@ -701,25 +701,8 @@ function bindEvents() {
 		});
 	}
 
-	document.getElementById('btnOpenOnboarding').addEventListener('click', async () => {
-		const W = 580,
-			H = 680,
-			MARGIN = 16;
-		let left = 100,
-			top = 60;
-		try {
-			const win = await chrome.windows.getCurrent();
-			left = (win.left ?? 0) + (win.width ?? 1200) - W - MARGIN;
-			top = (win.top ?? 0) + MARGIN;
-		} catch {}
-		chrome.windows.create({
-			url: chrome.runtime.getURL('onboarding.html'),
-			type: 'popup',
-			width: W,
-			height: H,
-			left,
-			top,
-		});
+	document.getElementById('btnOpenOnboarding').addEventListener('click', () => {
+		chrome.runtime.sendMessage({ type: 'OPEN_ONBOARDING', mode: 'setup' });
 		window.close();
 	});
 
@@ -757,26 +740,8 @@ function bindEvents() {
 		showView('viewMain');
 	});
 	document.getElementById('btnRemoveToken').addEventListener('click', handleRemoveToken);
-	document.getElementById('btnAddNip')?.addEventListener('click', async () => {
-		const W = 580,
-			H = 680,
-			MARGIN = 16;
-		let left = 100,
-			top = 60;
-		try {
-			const win = await chrome.windows.getCurrent();
-			left = (win.left ?? 0) + (win.width ?? 1200) - W - MARGIN;
-			top = (win.top ?? 0) + MARGIN;
-		} catch {}
-		chrome.windows.create({
-			url: chrome.runtime.getURL('onboarding.html?mode=add'),
-			type: 'popup',
-			width: W,
-			height: H,
-			left,
-			top,
-			focused: true,
-		});
+	document.getElementById('btnAddNip')?.addEventListener('click', () => {
+		chrome.runtime.sendMessage({ type: 'OPEN_ONBOARDING', mode: 'add' });
 	});
 	document.getElementById('btnErrorBack').addEventListener('click', determineAndShowView);
 	document.getElementById('btnLogsBack').addEventListener('click', determineAndShowView);
