@@ -1,22 +1,42 @@
 /**
  * storage.js – warstwa dostępu do chrome.storage.local
  *
- * Schemat invoiceState (v0.3):
- *   allSeenIds:      string[]   – wszystkie ID jakie kiedykolwiek pobraliśmy (deduplikacja)
- *   pendingInvoices: Invoice[]  – nowe, nieprzejrzane (licznik + badge)
- *   recentArchive:   Invoice[]  – ostatnio przejrzane (TTL 90 dni, bez limitu ilościowego)
- *   lastQueryTime:   string|null
+ * Schemat v1.1 (multi-NIP):
+ *
+ *   accounts: {
+ *     [nip: string]: {
+ *       encryptedToken:  { ciphertext, iv, salt }
+ *       companyName:     string | null
+ *       environment:     "production" | "demo" | "test"
+ *       pollOffset:      number   – ms offset od pełnej godziny (rozłożenie pollingu)
+ *       authState:       { refreshToken, refreshTokenExpiry }
+ *       pollState:       { lastPollTime, lastSuccessTime, consecutiveErrors, backoffUntil, needsPin, needsNewToken, lastError }
+ *       invoiceState:    { allSeenIds, pendingInvoices, recentArchive, lastQueryTime }
+ *     }
+ *   }
+ *   activeNip:   string | null
+ *   config:      { pollIntervalMinutes, notificationsEnabled, pendingDaysThreshold }
+ *   pinLockout:  { attempts, lockedUntil }
+ *   errorLog:    Array<{ time, code, message }>
+ *   archiveUndoBuffer: { nip, invoice } | null
+ *
+ * Migracja v0.x/v1.0.x → v1.1:
+ *   Stare klucze (encryptedToken, authState, pollState, invoiceState) przepisywane
+ *   do accounts[nip] przy pierwszym starcie.
  */
 
 const KEYS = {
-	ENCRYPTED_TOKEN: 'encryptedToken',
+	ACCOUNTS: 'accounts',
+	ACTIVE_NIP: 'activeNip',
 	CONFIG: 'config',
-	AUTH_STATE: 'authState',
-	POLL_STATE: 'pollState',
-	INVOICE_STATE: 'invoiceState',
 	ERROR_LOG: 'errorLog',
 	ARCHIVE_UNDO_BUFFER: 'archiveUndoBuffer',
 	PIN_LOCKOUT: 'pinLockout',
+	// Legacy keys (v1.0.x) – używane tylko przy migracji
+	_ENCRYPTED_TOKEN: 'encryptedToken',
+	_AUTH_STATE: 'authState',
+	_POLL_STATE: 'pollState',
+	_INVOICE_STATE: 'invoiceState',
 };
 
 const ARCHIVE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 dni
@@ -50,13 +70,165 @@ async function remove(key) {
 	});
 }
 
+// ─── Migracja v1.0.x → v1.1 ──────────────────────────────────────────────────
+
+/**
+ * Sprawdza czy dane są w starym formacie i przepisuje do accounts[nip].
+ * Wywołać raz przy starcie background.js przed jakimkolwiek odczytem.
+ */
+export async function migrateToMultiNip() {
+	const accounts = await get(KEYS.ACCOUNTS);
+	if (accounts !== null) return; // już zmigrowane
+
+	const oldToken = await get(KEYS._ENCRYPTED_TOKEN);
+	if (!oldToken) return; // brak danych do migracji (świeża instalacja)
+
+	const oldConfig = await get(KEYS.CONFIG);
+	const oldAuth = await get(KEYS._AUTH_STATE);
+	const oldPoll = await get(KEYS._POLL_STATE);
+	const oldInvoice = await get(KEYS._INVOICE_STATE);
+
+	const nip = oldConfig?.nip ?? null;
+	if (!nip) return; // nie da się zmigrować bez NIP-a
+
+	const newAccounts = {
+		[nip]: {
+			encryptedToken: oldToken,
+			companyName: oldConfig?.companyName ?? null,
+			environment: oldConfig?.environment ?? 'production',
+			pollOffset: 0,
+			authState: oldAuth ?? { refreshToken: null, refreshTokenExpiry: 0 },
+			pollState: oldPoll ?? defaultPollState(),
+			invoiceState: migrateInvoiceStateSchema(oldInvoice),
+		},
+	};
+
+	await set(KEYS.ACCOUNTS, newAccounts);
+	await set(KEYS.ACTIVE_NIP, nip);
+
+	// Nowy config bez pól per-NIP
+	const newConfig = {
+		pollIntervalMinutes: oldConfig?.pollIntervalMinutes ?? 60,
+		notificationsEnabled: oldConfig?.notificationsEnabled ?? false,
+		pendingDaysThreshold: oldConfig?.pendingDaysThreshold ?? 'month',
+	};
+	await set(KEYS.CONFIG, newConfig);
+
+	// Wyczyść stare klucze
+	await chrome.storage.local.remove([KEYS._ENCRYPTED_TOKEN, KEYS._AUTH_STATE, KEYS._POLL_STATE, KEYS._INVOICE_STATE]);
+}
+
+function migrateInvoiceStateSchema(raw) {
+	if (!raw) return defaultInvoiceState();
+	if (raw.allSeenIds !== undefined) return raw; // v0.3 – OK
+	// v0.2.0 / v0.1.x
+	return {
+		allSeenIds: raw.lastSeenIds ?? [],
+		pendingInvoices: raw.pendingInvoices ?? [],
+		recentArchive: [],
+		lastQueryTime: raw.lastQueryTime ?? null,
+	};
+}
+
+// ─── Accounts ─────────────────────────────────────────────────────────────────
+
+async function getAccounts() {
+	return (await get(KEYS.ACCOUNTS)) ?? {};
+}
+
+async function saveAccounts(accounts) {
+	await set(KEYS.ACCOUNTS, accounts);
+}
+
+/** Zwraca dane konta dla danego NIP-a lub null jeśli nie istnieje. */
+export async function getAccount(nip) {
+	const accounts = await getAccounts();
+	return accounts[nip] ?? null;
+}
+
+/** Zapisuje dane konta dla danego NIP-a. */
+export async function saveAccount(nip, data) {
+	const accounts = await getAccounts();
+	accounts[nip] = { ...accounts[nip], ...data };
+	await saveAccounts(accounts);
+}
+
+/** Zwraca listę wszystkich NIP-ów. */
+export async function getNipList() {
+	const accounts = await getAccounts();
+	return Object.keys(accounts);
+}
+
+/** Zwraca czy istnieje co najmniej jeden NIP. */
+export async function hasAnyAccount() {
+	const nips = await getNipList();
+	return nips.length > 0;
+}
+
+/** Dodaje nowe konto. Oblicza pollOffset na podstawie pozycji w kolejce. */
+export async function addAccount(nip, { encryptedToken, companyName, environment, intervalMs }) {
+	const accounts = await getAccounts();
+	const count = Object.keys(accounts).length;
+	const pollOffset = count * Math.floor(intervalMs / (count + 1));
+
+	accounts[nip] = {
+		encryptedToken,
+		companyName: companyName ?? null,
+		environment: environment ?? 'production',
+		pollOffset,
+		authState: { refreshToken: null, refreshTokenExpiry: 0 },
+		pollState: defaultPollState(),
+		invoiceState: defaultInvoiceState(),
+	};
+
+	// Przelicz offsety wszystkich kont równomiernie
+	const nips = Object.keys(accounts);
+	nips.forEach((n, i) => {
+		accounts[n].pollOffset = i * Math.floor(intervalMs / nips.length);
+	});
+
+	await saveAccounts(accounts);
+}
+
+/** Usuwa konto. Zwraca listę pozostałych NIP-ów. */
+export async function removeAccount(nip) {
+	const accounts = await getAccounts();
+	delete accounts[nip];
+
+	// Przelicz offsety pozostałych
+	const cfg = await getConfig();
+	const intervalMs = (cfg.pollIntervalMinutes ?? 60) * 60_000;
+	const nips = Object.keys(accounts);
+	nips.forEach((n, i) => {
+		accounts[n].pollOffset = i * Math.floor(intervalMs / nips.length);
+	});
+
+	await saveAccounts(accounts);
+
+	// Jeśli usunięto aktywny NIP, ustaw pierwszy dostępny
+	const activeNip = await getActiveNip();
+	if (activeNip === nip) {
+		await setActiveNip(nips[0] ?? null);
+	}
+
+	return nips;
+}
+
+// ─── Active NIP ───────────────────────────────────────────────────────────────
+
+export async function getActiveNip() {
+	return await get(KEYS.ACTIVE_NIP);
+}
+
+export async function setActiveNip(nip) {
+	await set(KEYS.ACTIVE_NIP, nip);
+}
+
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 export async function getConfig() {
 	return (
 		(await get(KEYS.CONFIG)) ?? {
-			nip: null,
-			environment: 'production',
 			pollIntervalMinutes: 60,
 			notificationsEnabled: false,
 			pendingDaysThreshold: 'month',
@@ -67,29 +239,33 @@ export async function saveConfig(config) {
 	await set(KEYS.CONFIG, config);
 }
 
-// ─── Token KSeF ───────────────────────────────────────────────────────────────
+// ─── Token KSeF (per NIP) ─────────────────────────────────────────────────────
 
-export async function getEncryptedToken() {
-	return await get(KEYS.ENCRYPTED_TOKEN);
+export async function getEncryptedToken(nip) {
+	const account = await getAccount(nip);
+	return account?.encryptedToken ?? null;
 }
-export async function saveEncryptedToken(data) {
-	await set(KEYS.ENCRYPTED_TOKEN, data);
+export async function saveEncryptedToken(nip, data) {
+	await saveAccount(nip, { encryptedToken: data });
 }
-export async function hasToken() {
-	return (await get(KEYS.ENCRYPTED_TOKEN)) !== null;
+export async function hasToken(nip) {
+	return (await getEncryptedToken(nip)) !== null;
 }
-export async function clearToken() {
-	await remove(KEYS.ENCRYPTED_TOKEN);
-	await remove(KEYS.AUTH_STATE);
+export async function clearToken(nip) {
+	await saveAccount(nip, { encryptedToken: null, authState: { refreshToken: null, refreshTokenExpiry: 0 } });
+	await clearAuthStateSession(nip);
 }
 
-// ─── Auth state ───────────────────────────────────────────────────────────────
+// ─── Auth state (per NIP) ────────────────────────────────────────────────────
 
-export async function getAuthState() {
-	const local = (await get(KEYS.AUTH_STATE)) ?? { refreshToken: null, refreshTokenExpiry: 0 };
+const sessionKey = (nip) => `accessTokenState_${nip}`;
+
+export async function getAuthState(nip) {
+	const account = await getAccount(nip);
+	const local = account?.authState ?? { refreshToken: null, refreshTokenExpiry: 0 };
 	const session = await chrome.storage.session
-		.get('accessTokenState')
-		.then((r) => r.accessTokenState ?? { accessToken: null, accessTokenExpiry: 0 })
+		.get(sessionKey(nip))
+		.then((r) => r[sessionKey(nip)] ?? { accessToken: null, accessTokenExpiry: 0 })
 		.catch(() => ({ accessToken: null, accessTokenExpiry: 0 }));
 	return {
 		accessToken: session.accessToken,
@@ -98,39 +274,68 @@ export async function getAuthState() {
 		refreshTokenExpiry: local.refreshTokenExpiry,
 	};
 }
-export async function saveAuthState(state) {
-	await set(KEYS.AUTH_STATE, { refreshToken: state.refreshToken, refreshTokenExpiry: state.refreshTokenExpiry });
+
+export async function saveAuthState(nip, state) {
+	await saveAccount(nip, {
+		authState: { refreshToken: state.refreshToken, refreshTokenExpiry: state.refreshTokenExpiry },
+	});
 	await chrome.storage.session.set({
-		accessTokenState: { accessToken: state.accessToken, accessTokenExpiry: state.accessTokenExpiry },
+		[sessionKey(nip)]: { accessToken: state.accessToken, accessTokenExpiry: state.accessTokenExpiry },
 	});
 }
-export async function clearAuthState() {
-	await remove(KEYS.AUTH_STATE);
-	await chrome.storage.session.remove('accessTokenState').catch(() => {});
+
+export async function clearAuthState(nip) {
+	await saveAccount(nip, { authState: { refreshToken: null, refreshTokenExpiry: 0 } });
+	await clearAuthStateSession(nip);
 }
 
-// ─── Poll state ───────────────────────────────────────────────────────────────
-
-export async function getPollState() {
-	return (
-		(await get(KEYS.POLL_STATE)) ?? {
-			lastPollTime: null,
-			lastSuccessTime: null,
-			consecutiveErrors: 0,
-			backoffUntil: null,
-			needsPin: false,
-			needsNewToken: false,
-			lastError: null,
-		}
-	);
-}
-export async function savePollState(state) {
-	await set(KEYS.POLL_STATE, state);
+async function clearAuthStateSession(nip) {
+	await chrome.storage.session.remove(sessionKey(nip)).catch(() => {});
 }
 
-export async function recordPollSuccess() {
-	const cur = await getPollState();
-	await savePollState({
+// ─── KSeF token plain (session, per NIP) ──────────────────────────────────────
+
+const sessionTokenKey = (nip) => `ksefTokenPlain_${nip}`;
+
+export async function getKsefTokenPlain(nip) {
+	const r = await chrome.storage.session.get(sessionTokenKey(nip)).catch(() => ({}));
+	return r[sessionTokenKey(nip)] ?? null;
+}
+
+export async function saveKsefTokenPlain(nip, token) {
+	await chrome.storage.session.set({ [sessionTokenKey(nip)]: token });
+}
+
+export async function clearKsefTokenPlain(nip) {
+	await chrome.storage.session.remove(sessionTokenKey(nip)).catch(() => {});
+}
+
+// ─── Poll state (per NIP) ────────────────────────────────────────────────────
+
+function defaultPollState() {
+	return {
+		lastPollTime: null,
+		lastSuccessTime: null,
+		consecutiveErrors: 0,
+		backoffUntil: null,
+		needsPin: false,
+		needsNewToken: false,
+		lastError: null,
+	};
+}
+
+export async function getPollState(nip) {
+	const account = await getAccount(nip);
+	return account?.pollState ?? defaultPollState();
+}
+
+export async function savePollState(nip, state) {
+	await saveAccount(nip, { pollState: state });
+}
+
+export async function recordPollSuccess(nip) {
+	const cur = await getPollState(nip);
+	await savePollState(nip, {
 		...cur,
 		lastPollTime: new Date().toISOString(),
 		lastSuccessTime: new Date().toISOString(),
@@ -143,9 +348,9 @@ export async function recordPollSuccess() {
 }
 
 /** Wygasła sesja – czeka na PIN. Zero backoffu, zero counter. */
-export async function recordNeedsPin() {
-	const cur = await getPollState();
-	await savePollState({
+export async function recordNeedsPin(nip) {
+	const cur = await getPollState(nip);
+	await savePollState(nip, {
 		...cur,
 		lastPollTime: new Date().toISOString(),
 		needsPin: true,
@@ -157,9 +362,9 @@ export async function recordNeedsPin() {
 }
 
 /** Token unieważniony lub błędny (450) – wymaga wprowadzenia nowego tokenu. */
-export async function recordNeedsNewToken(message) {
-	const cur = await getPollState();
-	await savePollState({
+export async function recordNeedsNewToken(nip, message) {
+	const cur = await getPollState(nip);
+	await savePollState(nip, {
 		...cur,
 		lastPollTime: new Date().toISOString(),
 		needsNewToken: true,
@@ -168,14 +373,14 @@ export async function recordNeedsNewToken(message) {
 		consecutiveErrors: 0,
 		lastError: { code: 'TOKEN_INVALID', message, time: new Date().toISOString() },
 	});
-	await appendErrorLog({ code: 'AUTH_FAILED_450', message });
+	await appendErrorLog({ code: 'AUTH_FAILED_450', message, nip });
 }
 
 /** Błąd sieciowy/serwera. Backoff: 1h → 2h → 4h → max 24h. */
-export async function recordPollError(code, message) {
-	const cur = await getPollState();
+export async function recordPollError(nip, code, message) {
+	const cur = await getPollState(nip);
 	const errors = (cur.consecutiveErrors ?? 0) + 1;
-	await savePollState({
+	await savePollState(nip, {
 		...cur,
 		lastPollTime: new Date().toISOString(),
 		consecutiveErrors: errors,
@@ -183,12 +388,12 @@ export async function recordPollError(code, message) {
 		needsPin: false,
 		lastError: { code, message, time: new Date().toISOString() },
 	});
-	await appendErrorLog({ code, message });
+	await appendErrorLog({ code, message, nip });
 }
 
-export async function recordRateLimit(seconds) {
-	const cur = await getPollState();
-	await savePollState({
+export async function recordRateLimit(nip, seconds) {
+	const cur = await getPollState(nip);
+	await savePollState(nip, {
 		...cur,
 		lastPollTime: new Date().toISOString(),
 		backoffUntil: new Date(Date.now() + seconds * 1000).toISOString(),
@@ -196,30 +401,24 @@ export async function recordRateLimit(seconds) {
 	});
 }
 
-// ─── Invoice state ────────────────────────────────────────────────────────────
+// ─── Invoice state (per NIP) ─────────────────────────────────────────────────
 
-export async function saveInvoiceState(state) {
-	await set(KEYS.INVOICE_STATE, state);
+function defaultInvoiceState() {
+	return {
+		allSeenIds: [],
+		pendingInvoices: [],
+		recentArchive: [],
+		lastQueryTime: null,
+	};
 }
 
-export async function getInvoiceState() {
-	const raw = await get(KEYS.INVOICE_STATE);
-	if (raw && (raw.lastSeenIds || raw.newCount != null) && !raw.allSeenIds) {
-		return {
-			allSeenIds: raw.lastSeenIds ?? [],
-			pendingInvoices: [],
-			recentArchive: [],
-			lastQueryTime: raw.lastQueryTime ?? null,
-		};
-	}
-	return (
-		raw ?? {
-			allSeenIds: [],
-			pendingInvoices: [],
-			recentArchive: [],
-			lastQueryTime: null,
-		}
-	);
+export async function getInvoiceState(nip) {
+	const account = await getAccount(nip);
+	return account?.invoiceState ?? defaultInvoiceState();
+}
+
+export async function saveInvoiceState(nip, state) {
+	await saveAccount(nip, { invoiceState: state });
 }
 
 /** Normalizuje surowy obiekt faktury z KSeF API.
@@ -256,12 +455,10 @@ export function normalizeInvoice(raw) {
 }
 
 /**
- * Inicjalizuje stan po onboardingu.
- * Faktury z progu pendingDaysThreshold → pendingInvoices.
- * Starsze → recentArchive (bez limitu ilościowego, TTL 90 dni).
+ * Inicjalizuje stan po onboardingu NIP-a.
  * @returns {number} liczba faktur w pending
  */
-export async function initializeArchive(rawInvoices) {
+export async function initializeArchive(nip, rawInvoices) {
 	const cfg = await getConfig();
 	const threshold = cfg.pendingDaysThreshold ?? 'month';
 	const cutoff =
@@ -282,7 +479,7 @@ export async function initializeArchive(rawInvoices) {
 			? normalized[normalized.length - 1].issueDate || new Date(Date.now() - 90 * 24 * 3_600_000).toISOString()
 			: new Date(Date.now() - 90 * 24 * 3_600_000).toISOString();
 
-	await set(KEYS.INVOICE_STATE, {
+	await saveInvoiceState(nip, {
 		allSeenIds: [...new Set(normalized.map((inv) => inv.id))],
 		pendingInvoices: pending,
 		recentArchive: older,
@@ -294,12 +491,10 @@ export async function initializeArchive(rawInvoices) {
 
 /**
  * Aktualizuje stan podczas regularnego pollingu.
- * Nowe faktury (nieznane) → pendingInvoices.
- * Przycina recentArchive do wpisów młodszych niż 90 dni.
  * @returns {number} liczba nowych faktur
  */
-export async function updateInvoices(rawInvoices) {
-	const state = await getInvoiceState();
+export async function updateInvoices(nip, rawInvoices) {
+	const state = await getInvoiceState(nip);
 	const seenSet = new Set(state.allSeenIds);
 
 	const normalized = rawInvoices.map(normalizeInvoice).filter((inv) => inv.id);
@@ -312,7 +507,7 @@ export async function updateInvoices(rawInvoices) {
 		(inv) => new Date(inv.fetchedAt || inv.issueDate || 0).getTime() > cutoff
 	);
 
-	await set(KEYS.INVOICE_STATE, {
+	await saveInvoiceState(nip, {
 		allSeenIds: newAllIds,
 		pendingInvoices: [...state.pendingInvoices, ...trulyNew],
 		recentArchive: prunedArchive,
@@ -322,16 +517,13 @@ export async function updateInvoices(rawInvoices) {
 	return trulyNew.length;
 }
 
-/**
- * Przenosi fakturę z pendingInvoices → recentArchive.
- * @returns {Invoice|null} przeniesiona faktura (do undo)
- */
-export async function markNoticed(invoiceId) {
-	const state = await getInvoiceState();
+/** Przenosi fakturę z pendingInvoices → recentArchive. */
+export async function markNoticed(nip, invoiceId) {
+	const state = await getInvoiceState(nip);
 	const invoice = state.pendingInvoices.find((inv) => inv.id === invoiceId);
 	if (!invoice) return null;
 
-	await set(KEYS.INVOICE_STATE, {
+	await saveInvoiceState(nip, {
 		...state,
 		pendingInvoices: state.pendingInvoices.filter((inv) => inv.id !== invoiceId),
 		recentArchive: [invoice, ...state.recentArchive],
@@ -339,26 +531,22 @@ export async function markNoticed(invoiceId) {
 	return invoice;
 }
 
-/**
- * Cofa markNoticed – przenosi z recentArchive z powrotem do pendingInvoices.
- */
-export async function undoNoticed(invoiceId) {
-	const state = await getInvoiceState();
+/** Cofa markNoticed. */
+export async function undoNoticed(nip, invoiceId) {
+	const state = await getInvoiceState(nip);
 	const invoice = state.recentArchive.find((inv) => inv.id === invoiceId);
 	if (!invoice) return;
 
-	await set(KEYS.INVOICE_STATE, {
+	await saveInvoiceState(nip, {
 		...state,
 		pendingInvoices: [invoice, ...state.pendingInvoices],
 		recentArchive: state.recentArchive.filter((inv) => inv.id !== invoiceId),
 	});
 }
 
-/**
- * Wypełnia recentArchive najnowszymi fakturami jeśli jest puste.
- */
-export async function ensureArchiveBackfill(rawInvoices) {
-	const state = await getInvoiceState();
+/** Wypełnia recentArchive najnowszymi fakturami jeśli jest puste. */
+export async function ensureArchiveBackfill(nip, rawInvoices) {
+	const state = await getInvoiceState(nip);
 	if (state.recentArchive.length > 0) return;
 	if (!rawInvoices || rawInvoices.length === 0) return;
 
@@ -369,36 +557,36 @@ export async function ensureArchiveBackfill(rawInvoices) {
 		.sort((a, b) => (b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || ''));
 
 	if (archive.length === 0) return;
-	await set(KEYS.INVOICE_STATE, { ...state, recentArchive: archive });
+	await saveInvoiceState(nip, { ...state, recentArchive: archive });
 }
 
 /** Usuwa fakturę z archiwum. */
-export async function dismissFromArchive(invoiceId) {
-	const state = await getInvoiceState();
+export async function dismissFromArchive(nip, invoiceId) {
+	const state = await getInvoiceState(nip);
 	const invoice = state.recentArchive.find((inv) => inv.id === invoiceId);
-	if (invoice) await set(KEYS.ARCHIVE_UNDO_BUFFER, invoice);
-	await set(KEYS.INVOICE_STATE, {
+	if (invoice) await set(KEYS.ARCHIVE_UNDO_BUFFER, { nip, invoice });
+	await saveInvoiceState(nip, {
 		...state,
 		recentArchive: state.recentArchive.filter((inv) => inv.id !== invoiceId),
 	});
 }
 
 /** Cofa dismissFromArchive. */
-export async function undoDismissArchive(invoiceId) {
+export async function undoDismissArchive(nip, invoiceId) {
 	const undoBuffer = await get(KEYS.ARCHIVE_UNDO_BUFFER);
-	if (!undoBuffer || undoBuffer.id !== invoiceId) return;
-	const state = await getInvoiceState();
-	const merged = [undoBuffer, ...state.recentArchive].sort((a, b) =>
+	if (!undoBuffer || undoBuffer.invoice?.id !== invoiceId || undoBuffer.nip !== nip) return;
+	const state = await getInvoiceState(nip);
+	const merged = [undoBuffer.invoice, ...state.recentArchive].sort((a, b) =>
 		(b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || '')
 	);
-	await set(KEYS.INVOICE_STATE, { ...state, recentArchive: merged });
+	await saveInvoiceState(nip, { ...state, recentArchive: merged });
 	await remove(KEYS.ARCHIVE_UNDO_BUFFER);
 }
 
 /** Oznacza wszystkie oczekujące jako przejrzane. */
-export async function markAllNoticed() {
-	const state = await getInvoiceState();
-	await set(KEYS.INVOICE_STATE, {
+export async function markAllNoticed(nip) {
+	const state = await getInvoiceState(nip);
+	await saveInvoiceState(nip, {
 		...state,
 		pendingInvoices: [],
 		recentArchive: [...state.pendingInvoices, ...state.recentArchive],
@@ -417,7 +605,7 @@ export async function getErrorLog() {
 	return (await get(KEYS.ERROR_LOG)) ?? [];
 }
 
-// ─── PIN lockout ───────────────────────────────────────────────────────────────
+// ─── PIN lockout ──────────────────────────────────────────────────────────────
 
 const PIN_MAX_ATTEMPTS = 5;
 const PIN_LOCKOUT_MS = 30_000; // 30 sekund
