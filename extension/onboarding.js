@@ -554,13 +554,18 @@ async function confirmPin() {
 		pendingConfig.ksefToken = ''; // wymaż plain text z pamięci
 
 		// Wyślij ADD_ACCOUNT do background – dodaje konto i ustawia alarm
-		await chrome.runtime.sendMessage({
+		const addResponse = await chrome.runtime.sendMessage({
 			type: 'ADD_ACCOUNT',
 			nip: pendingConfig.nip,
 			encryptedToken: encrypted,
 			companyName: pendingConfig.companyName ?? null,
 			environment: pendingConfig.environment,
 		});
+
+		if (!addResponse?.ok) {
+			errEl.textContent = addResponse?.error ?? 'Nie udało się dodać konta.';
+			return;
+		}
 
 		goToStep(3);
 		await runFetchInvoices();

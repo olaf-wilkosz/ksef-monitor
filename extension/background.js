@@ -183,6 +183,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				case 'ADD_ACCOUNT': {
 					// Dodaje nowe konto i uruchamia dla niego alarm
 					const { nip, encryptedToken, companyName, environment } = message;
+					// Blokuj duplikaty
+					const existing = await getAccount(nip);
+					if (existing) {
+						sendResponse({ ok: false, error: `NIP ${nip} jest już skonfigurowany.` });
+						break;
+					}
 					const cfg = await getConfig();
 					await addAccount(nip, {
 						encryptedToken,
