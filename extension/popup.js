@@ -1141,115 +1141,81 @@ function renderNipList() {
 	container.innerHTML = '';
 
 	accounts.forEach((account) => {
-		const isActive = account.nip === activeNip;
+		const row = document.createElement('div');
+		row.className = 'nip-list-row';
+		row.style.cssText = 'position:relative;margin-bottom:6px;display:flex;align-items:center;gap:6px;';
 
-		const card = document.createElement('div');
-		card.className = 'nip-card' + (isActive ? ' nip-card--active' : '');
+		// Jednolinijkowy input: 🏢 NIP · Nazwa
+		const inputWrap = document.createElement('div');
+		inputWrap.style.cssText = 'position:relative;flex:1;min-width:0;';
 
-		// Nagłówek: NIP + środowisko + kosz
-		const header = document.createElement('div');
-		header.className = 'nip-card-header';
+		const input = document.createElement('input');
+		input.type = 'text';
+		input.className = 'nip-card-name-input';
+		const buildLabel = (name) => `🏢 NIP ${account.nip}${name ? '  ·  ' + name : ''}`;
+		input.value = buildLabel(account.companyName);
+		input.readOnly = true;
+		input.style.cursor = 'default';
+		input.setAttribute('aria-label', `NIP ${account.nip}`);
 
-		const nipLabel = document.createElement('span');
-		nipLabel.className = 'nip-card-nip';
-		nipLabel.textContent = account.nip;
-
-		const envBadge = document.createElement('span');
-		envBadge.className = 'nip-card-env';
-		const envLabels = { production: 'PRD', demo: 'DEMO', test: 'TEST' };
-		envBadge.textContent = envLabels[account.environment] ?? 'PRD';
-
-		if (!isActive) {
-			const btnActivate = document.createElement('button');
-			btnActivate.className = 'nip-card-activate';
-			btnActivate.textContent = 'Przełącz';
-			btnActivate.addEventListener('click', async () => {
-				await switchNip(account.nip);
-				renderNipList();
-			});
-			header.appendChild(nipLabel);
-			header.appendChild(envBadge);
-			header.appendChild(btnActivate);
-		} else {
-			const activeMark = document.createElement('span');
-			activeMark.className = 'nip-card-active-mark';
-			activeMark.textContent = '✓ aktywny';
-			header.appendChild(nipLabel);
-			header.appendChild(envBadge);
-			header.appendChild(activeMark);
-		}
-
-		// Nazwa firmy – edytowalne pole z ikonką ✏️/✓
-		const nameRow = document.createElement('div');
-		nameRow.className = 'nip-card-name-row';
-
-		const nameWrap = document.createElement('div');
-		nameWrap.style.cssText = 'position:relative;flex:1;min-width:0;';
-
-		const nameInput = document.createElement('input');
-		nameInput.type = 'text';
-		nameInput.className = 'nip-card-name-input';
-		nameInput.value = account.companyName ?? '';
-		nameInput.placeholder = 'Nazwa firmy (opcjonalnie)';
-		nameInput.readOnly = true;
-		nameInput.style.cursor = 'default';
-		nameInput.setAttribute('aria-label', `Nazwa firmy dla NIP ${account.nip}`);
-
-		const editHint = document.createElement('span');
-		editHint.style.cssText =
+		const hint = document.createElement('span');
+		hint.style.cssText =
 			'position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:12px;cursor:pointer;';
-		editHint.textContent = '✏️';
-		editHint.setAttribute('role', 'button');
-		editHint.setAttribute('tabindex', '0');
-		editHint.setAttribute('aria-label', 'Edytuj nazwę firmy');
+		hint.textContent = '✏️';
+		hint.setAttribute('role', 'button');
+		hint.setAttribute('tabindex', '0');
+		hint.setAttribute('aria-label', 'Edytuj nazwę firmy');
 
 		const saveName = async () => {
-			const newName = nameInput.value.trim() || null;
+			// Wyekstrahuj nazwę z pola (po ' · ')
+			const raw = input.value;
+			const sepIdx = raw.indexOf('  \u00B7  ');
+			const newName = sepIdx >= 0 ? raw.slice(sepIdx + 5).trim() || null : null;
 			account.companyName = newName;
-			const raw = await chrome.storage.local.get('accounts');
-			const stored = raw.accounts ?? {};
+			const stored = (await chrome.storage.local.get('accounts')).accounts ?? {};
 			if (stored[account.nip]) {
 				stored[account.nip].companyName = newName;
 				await chrome.storage.local.set({ accounts: stored });
 			}
-			nameInput.readOnly = true;
-			nameInput.style.cursor = 'default';
-			editHint.textContent = '✏️';
+			input.value = buildLabel(newName);
+			input.readOnly = true;
+			input.style.cursor = 'default';
+			hint.textContent = '✏️';
 			if (account.nip === activeNip) renderNipSelector();
 		};
 
-		editHint.addEventListener('click', () => {
-			if (!nameInput.readOnly) {
-				saveName();
-			} else {
-				nameInput.readOnly = false;
-				nameInput.style.cursor = 'text';
-				nameInput.focus();
-				nameInput.select();
-				editHint.textContent = '✓';
-			}
-		});
-		editHint.addEventListener('keydown', (e) => {
+		const startEdit = () => {
+			// W trybie edycji pole zawiera tylko nazwę (bez prefiksu)
+			input.value = account.companyName ?? '';
+			input.readOnly = false;
+			input.style.cursor = 'text';
+			input.focus();
+			input.select();
+			hint.textContent = '✓';
+		};
+
+		hint.addEventListener('click', () => (input.readOnly ? startEdit() : saveName()));
+		hint.addEventListener('keydown', (e) => {
 			if (e.key === 'Enter' || e.key === ' ') {
 				e.preventDefault();
-				editHint.click();
+				hint.click();
 			}
 		});
-		nameInput.addEventListener('keydown', (e) => {
+		input.addEventListener('keydown', (e) => {
 			if (e.key === 'Enter') {
 				e.preventDefault();
 				saveName();
 			}
 			if (e.key === 'Escape') {
-				nameInput.value = account.companyName ?? '';
-				nameInput.readOnly = true;
-				nameInput.style.cursor = 'default';
-				editHint.textContent = '✏️';
+				input.value = buildLabel(account.companyName);
+				input.readOnly = true;
+				input.style.cursor = 'default';
+				hint.textContent = '✏️';
 			}
 		});
 
-		nameWrap.appendChild(nameInput);
-		nameWrap.appendChild(editHint);
+		inputWrap.appendChild(input);
+		inputWrap.appendChild(hint);
 
 		const btnRemove = document.createElement('button');
 		btnRemove.className = 'nip-list-remove';
@@ -1257,12 +1223,9 @@ function renderNipList() {
 		btnRemove.setAttribute('aria-label', `Usuń NIP ${account.nip}`);
 		btnRemove.addEventListener('click', () => handleRemoveNip(account.nip));
 
-		nameRow.appendChild(nameWrap);
-		nameRow.appendChild(btnRemove);
-
-		card.appendChild(header);
-		card.appendChild(nameRow);
-		container.appendChild(card);
+		row.appendChild(inputWrap);
+		row.appendChild(btnRemove);
+		container.appendChild(row);
 	});
 }
 

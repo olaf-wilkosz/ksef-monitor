@@ -1010,76 +1010,29 @@
 			}
 
 			/* ── NIP cards w ustawieniach ── */
-			.nip-card {
-				border: 1px solid #e6edf4;
-				border-radius: 8px;
-				padding: 8px 10px;
-				margin-bottom: 6px;
-				background: #fafafa;
-			}
-			.nip-card--active {
-				border-color: #b0c8e0;
-				background: #edf2f7;
-			}
-			.nip-card-header {
-				display: flex;
-				align-items: center;
-				gap: 6px;
-				margin-bottom: 6px;
-			}
-			.nip-card-nip {
-				font-size: 12px;
-				font-weight: 600;
-				color: #013f71;
-				flex: 1;
-			}
-			.nip-card-env {
-				font-size: 10px;
-				background: rgba(1, 63, 113, 0.1);
-				color: #013f71;
-				padding: 1px 6px;
-				border-radius: 8px;
-				font-weight: 600;
-			}
-			.nip-card-name-row {
-				display: flex;
-				align-items: center;
-				gap: 6px;
-			}
+			/* ── NIP cards w ustawieniach ── */
 			.nip-card-name-input {
 				width: 100%;
-				border: 1px solid #ddd;
-				border-radius: 6px;
-				padding: 4px 28px 4px 8px;
-				font-size: 12px;
+				border: 1px solid #b0c8e0;
+				border-radius: 7px;
+				padding: 7px 32px 7px 10px;
+				font-size: 11px;
 				font-family: inherit;
-				background: #f0f4f8;
-				color: #333;
+				color: #013f71;
+				background: #edf2f7;
+				cursor: default;
+				outline: none;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
 			}
 			.nip-card-name-input:not([readonly]) {
 				background: white;
 				border-color: #013f71;
-				outline: none;
-			}
-			.nip-card-activate {
-				background: none;
-				border: 1px solid #d0e4f0;
-				border-radius: 5px;
-				color: #013f71;
-				font-size: 11px;
-				cursor: pointer;
-				padding: 3px 8px;
-				flex-shrink: 0;
-				white-space: nowrap;
-			}
-			.nip-card-activate:hover {
-				background: #e8f0f8;
-			}
-			.nip-card-active-mark {
-				font-size: 11px;
-				color: #2e7d32;
-				flex-shrink: 0;
-				white-space: nowrap;
+				color: #333;
+				cursor: text;
+				white-space: normal;
+				overflow: visible;
 			}
 			.nip-list-remove {
 				background: none;
@@ -1088,11 +1041,15 @@
 				color: #999;
 				font-size: 13px;
 				cursor: pointer;
-				padding: 2px 6px;
+				padding: 0;
 				flex-shrink: 0;
+				align-self: stretch;
+				min-width: 28px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
 				transition:
 					background 0.12s,
-					color 0.12s,
 					border-color 0.12s;
 			}
 			.nip-list-remove:hover {
