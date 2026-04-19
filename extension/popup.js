@@ -1162,10 +1162,6 @@ function showSettingsView() {
 	document.getElementById('selectInterval').value = String(config.pollIntervalMinutes ?? 60);
 	document.getElementById('selectPendingDays').value = String(config.pendingDaysThreshold ?? 'month');
 
-	// Środowisko per aktywny NIP
-	const selectEnv = document.getElementById('selectEnv');
-	if (selectEnv) selectEnv.value = account?.environment ?? 'production';
-
 	document.getElementById('toggleNotifications').checked = !!config.notificationsEnabled;
 
 	// Ukryj stare pole nazwy firmy – zastąpione przez karty NIP-ów
@@ -1366,19 +1362,8 @@ async function handleSaveSettings() {
 	await chrome.storage.local.set({ config });
 	await chrome.runtime.sendMessage({ type: 'UPDATE_INTERVAL', minutes: config.pollIntervalMinutes });
 
-	// Środowisko per aktywny NIP
-	const newEnv = document.getElementById('selectEnv')?.value ?? 'production';
-	const result = await chrome.storage.local.get('accounts');
-	const storedAccounts = result.accounts ?? {};
-	if (activeNip && storedAccounts[activeNip]) {
-		storedAccounts[activeNip].environment = newEnv;
-		await chrome.storage.local.set({ accounts: storedAccounts });
-	}
-	const acc = activeAccount();
-	if (acc) acc.environment = newEnv;
-
 	const labels = { production: 'PRD', demo: 'DEMO', test: 'TEST' };
-	document.getElementById('envLabel').textContent = labels[newEnv] ?? 'PRD';
+	document.getElementById('envLabel').textContent = labels[activeAccount()?.environment ?? 'production'] ?? 'PRD';
 
 	await loadState();
 	renderMainView();
