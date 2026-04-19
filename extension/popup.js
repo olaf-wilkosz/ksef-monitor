@@ -40,6 +40,7 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
 
 	if (!nipListChanged) return;
 
+	const wasEmpty = prevNips.size === 0;
 	await loadState();
 	const ps = activePollState();
 	if (ps.needsNewToken) {
@@ -51,10 +52,14 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
 		return;
 	}
 
-	// Wróć do ustawień – użytkownik widzi zaktualizowaną listę NIP-ów
-	// i może od razu dodać kolejny
 	renderMainView();
-	showSettingsView();
+	// Pierwsze konto – idź do głównego widoku (użytkownik skończył onboarding)
+	// Kolejne zmiany (dodanie/usunięcie) – zostań w ustawieniach
+	if (wasEmpty) {
+		showView('viewMain');
+	} else {
+		showSettingsView();
+	}
 });
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
@@ -68,11 +73,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Odśwież stan gdy popup odzyska focus (np. po zamknięciu okna onboardingu)
 window.addEventListener('focus', async () => {
 	const prevNips = accounts.map((a) => a.nip).join(',');
+	const wasEmpty = accounts.length === 0;
 	await loadState();
 	const currNips = accounts.map((a) => a.nip).join(',');
 	if (currNips !== prevNips) {
 		renderMainView();
-		showSettingsView();
+		if (wasEmpty) {
+			showView('viewMain');
+		} else {
+			showSettingsView();
+		}
 	}
 });
 
