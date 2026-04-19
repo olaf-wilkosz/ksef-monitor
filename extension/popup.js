@@ -1167,10 +1167,8 @@ function renderNipList() {
 		hint.setAttribute('aria-label', 'Edytuj nazwę firmy');
 
 		const saveName = async () => {
-			// Wyekstrahuj nazwę z pola (po ' · ')
-			const raw = input.value;
-			const sepIdx = raw.indexOf('  \u00B7  ');
-			const newName = sepIdx >= 0 ? raw.slice(sepIdx + 5).trim() || null : null;
+			// Pole w trybie edycji zawiera tylko nazwę – czytamy wprost
+			const newName = input.value.trim() || null;
 			account.companyName = newName;
 			const stored = (await chrome.storage.local.get('accounts')).accounts ?? {};
 			if (stored[account.nip]) {
