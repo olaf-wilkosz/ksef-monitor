@@ -254,6 +254,7 @@ function renderNipSelector() {
 			const badge = account.pendingCount > 0 ? ` <span class="nip-badge">${account.pendingCount}</span>` : '';
 			btn.innerHTML = `<span class="nip-btn-label">${escHtml(name)}</span>${badge}`;
 			btn.setAttribute('aria-label', `${name}, ${account.pendingCount} nowych`);
+			btn.setAttribute('title', account.nip);
 			btn.addEventListener('click', () => switchNip(account.nip));
 			container.appendChild(btn);
 		});
