@@ -706,35 +706,6 @@ async function handleUndoNoticed() {
 // ─── Zdarzenia ────────────────────────────────────────────────────────────────
 
 function bindEvents() {
-	// Edycja nazwy firmy w ustawieniach (per aktywny NIP)
-	const scHint = document.getElementById('settingsCompanyHint');
-	const scInput = document.getElementById('settingsCompanyInput');
-	if (scHint && scInput) {
-		scHint.addEventListener('click', () => {
-			if (!scInput.readOnly) {
-				// ✓ – zatwierdź
-				saveSettingsCompanyName();
-			} else {
-				// ✏️ – odblokuj
-				scInput.readOnly = false;
-				scInput.style.cursor = 'text';
-				scInput.value = activeAccount()?.companyName ?? '';
-				scInput.focus();
-				scInput.select();
-				scHint.textContent = '✓';
-			}
-		});
-		scInput.addEventListener('keydown', (e) => {
-			if (e.key === 'Enter') {
-				e.preventDefault();
-				saveSettingsCompanyName();
-			}
-			if (e.key === 'Escape') {
-				cancelSettingsCompanyEdit();
-			}
-		});
-	}
-
 	document.getElementById('btnOpenOnboarding').addEventListener('click', () => {
 		chrome.runtime.sendMessage({ type: 'OPEN_ONBOARDING', mode: 'setup' });
 		window.close();
@@ -773,7 +744,6 @@ function bindEvents() {
 		renderMainView();
 		showView('viewMain');
 	});
-	document.getElementById('btnRemoveToken').addEventListener('click', handleRemoveToken);
 	document.getElementById('btnAddNip')?.addEventListener('click', () => {
 		chrome.runtime.sendMessage({ type: 'OPEN_ONBOARDING', mode: 'add' });
 		// Nie zamykamy popupa – czekamy na storage.onChanged gdy nowe konto zostanie dodane
@@ -1158,23 +1128,10 @@ async function handleReinitArchive() {
 // ─── Ustawienia ───────────────────────────────────────────────────────────────
 
 function showSettingsView() {
-	const account = activeAccount();
 	document.getElementById('selectInterval').value = String(config.pollIntervalMinutes ?? 60);
 	document.getElementById('selectPendingDays').value = String(config.pendingDaysThreshold ?? 'month');
-
 	document.getElementById('toggleNotifications').checked = !!config.notificationsEnabled;
-
-	// Ukryj stare pole nazwy firmy – zastąpione przez karty NIP-ów
-	const companyEl = document.getElementById('settingsCompany');
-	if (companyEl) companyEl.style.display = 'none';
-
-	// Lista NIP-ów z przyciskami usuwania
 	renderNipList();
-
-	// "Usuń token" jest redundantny gdy lista NIP-ów jest widoczna (ma własne "X")
-	const btnRemove = document.getElementById('btnRemoveToken');
-	if (btnRemove) btnRemove.style.display = 'none';
-
 	showView('viewSettings');
 }
 
@@ -1309,42 +1266,6 @@ function renderNipList() {
 	});
 }
 
-async function saveSettingsCompanyName() {
-	const scInput = document.getElementById('settingsCompanyInput');
-	const scHint = document.getElementById('settingsCompanyHint');
-	const newName = scInput.value.trim() || null;
-
-	// Zapisz nazwę firmy per aktywny NIP przez saveAccount w background (przez storage bezpośrednio)
-	const result = await chrome.storage.local.get('accounts');
-	const storedAccounts = result.accounts ?? {};
-	if (activeNip && storedAccounts[activeNip]) {
-		storedAccounts[activeNip].companyName = newName;
-		await chrome.storage.local.set({ accounts: storedAccounts });
-	}
-
-	// Aktualizuj lokalny stan
-	const acc = activeAccount();
-	if (acc) acc.companyName = newName;
-
-	scInput.readOnly = true;
-	scInput.style.cursor = 'default';
-	scHint.textContent = '✏️';
-	// odśwież wyświetlany label (z NIP)
-	const label = '🏢 NIP ' + activeNip + (newName ? '  ·  ' + newName : '');
-	scInput.value = label;
-}
-
-function cancelSettingsCompanyEdit() {
-	const scInput = document.getElementById('settingsCompanyInput');
-	const scHint = document.getElementById('settingsCompanyHint');
-	scInput.readOnly = true;
-	scInput.style.cursor = 'default';
-	scHint.textContent = '✏️';
-	const acc = activeAccount();
-	const label = '🏢 NIP ' + activeNip + (acc?.companyName ? '  ·  ' + acc.companyName : '');
-	scInput.value = label;
-}
-
 async function handleSaveSettings() {
 	// jeśli nazwa firmy była w trakcie edycji – zapisujemy co jest w polu
 	const scInput = document.getElementById('settingsCompanyInput');
@@ -1368,11 +1289,6 @@ async function handleSaveSettings() {
 	await loadState();
 	renderMainView();
 	showView('viewMain');
-}
-
-async function handleRemoveToken() {
-	// Usuwa aktywny NIP (stara semantyka "usuń token" = usuń aktywne konto)
-	await handleRemoveNip(activeNip);
 }
 
 async function handleRemoveNip(nip) {

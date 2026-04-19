@@ -1343,46 +1343,13 @@
 		<!-- VIEW: settings -->
 		<div class="view" id="viewSettings">
 			<div class="settings-wrap">
-				<div id="settingsCompany" style="display: none; position: relative; margin-bottom: 12px">
-					<input
-						type="text"
-						id="settingsCompanyInput"
-						readonly
-						aria-label="Nazwa firmy"
-						style="
-							width: 100%;
-							font-size: 12px;
-							color: #013f71;
-							font-family: inherit;
-							padding: 7px 32px 7px 10px;
-							background: #edf2f7;
-							border: 1px solid #b0c8e0;
-							border-radius: 7px;
-							cursor: default;
-							outline: none;
-							box-sizing: border-box;
-							overflow: hidden;
-							text-overflow: ellipsis;
-							white-space: nowrap;
-						"
-					/>
-					<span
-						id="settingsCompanyHint"
-						role="button"
-						tabindex="0"
-						aria-label="Edytuj nazwę firmy"
-						style="
-							position: absolute;
-							right: 8px;
-							top: 50%;
-							transform: translateY(-50%);
-							font-size: 12px;
-							cursor: pointer;
-						"
-						>✏️</span
-					>
-				</div>
+				<div class="section-title">Podpięte NIP-y</div>
+				<div id="nipListSettings" style="margin-bottom: 8px"></div>
+				<button class="btn btn-secondary" id="btnAddNip" style="width: 100%; margin-bottom: 10px">
+					+ Dodaj NIP
+				</button>
 
+				<hr class="sep" />
 				<div class="section-title">Polling</div>
 				<div class="setting-row">
 					<span class="setting-label"
@@ -1426,22 +1393,8 @@
 				</div>
 
 				<hr class="sep" />
-				<div class="section-title">Bezpieczeństwo</div>
-				<p style="font-size: 11px; color: #888; margin-bottom: 10px; line-height: 1.5">
-					Token przechowywany zaszyfrowany AES-256-GCM.<br />
-					Klucz szyfrowania pochodzi wyłącznie z Twojego PIN-u.
-				</p>
-
-				<hr class="sep" />
-				<div class="section-title">Podpięte NIP-y</div>
-				<div id="nipListSettings" style="margin-bottom: 8px"></div>
-				<button class="btn btn-secondary" id="btnAddNip" style="width: 100%; margin-bottom: 10px">
-					+ Dodaj NIP
-				</button>
-
 				<div style="display: flex; gap: 8px; margin-bottom: 8px">
 					<button class="btn btn-primary" id="btnSaveSettings" style="flex: 1">💾 Zapisz</button>
-					<button class="btn btn-danger" id="btnRemoveToken">🗑️ Usuń token</button>
 				</div>
 				<button class="btn btn-secondary" id="btnReinitArchive" style="width: 100%; margin-bottom: 6px">
 					🔄 Odśwież archiwum faktur
