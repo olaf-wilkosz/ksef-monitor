@@ -55,10 +55,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Odśwież stan gdy popup odzyska focus (np. po zamknięciu okna onboardingu)
 window.addEventListener('focus', async () => {
-	const before = accounts.length;
+	const prevNips = accounts.map((a) => a.nip).join(',');
 	await loadState();
-	if (accounts.length !== before) {
-		// Liczba kont się zmieniła – przerenderuj widok
+	const currNips = accounts.map((a) => a.nip).join(',');
+	if (currNips !== prevNips) {
 		renderMainView();
 		showView('viewMain');
 	}
@@ -228,9 +228,9 @@ function renderNipSelector() {
 		accounts.forEach((account) => {
 			const btn = document.createElement('button');
 			btn.className = 'nip-btn' + (account.nip === activeNip ? ' active' : '');
-			const name = account.companyName ? trunc(account.companyName, 22) : `NIP ${account.nip}`;
+			const name = account.companyName || `NIP ${account.nip}`;
 			const badge = account.pendingCount > 0 ? ` <span class="nip-badge">${account.pendingCount}</span>` : '';
-			btn.innerHTML = escHtml(name) + badge;
+			btn.innerHTML = `<span class="nip-btn-label">${escHtml(name)}</span>${badge}`;
 			btn.setAttribute('aria-label', `${name}, ${account.pendingCount} nowych`);
 			btn.addEventListener('click', () => switchNip(account.nip));
 			container.appendChild(btn);
@@ -754,6 +754,7 @@ function bindEvents() {
 	document.getElementById('btnRemoveToken').addEventListener('click', handleRemoveToken);
 	document.getElementById('btnAddNip')?.addEventListener('click', () => {
 		chrome.runtime.sendMessage({ type: 'OPEN_ONBOARDING', mode: 'add' });
+		// Nie zamykamy popupa – czekamy na storage.onChanged gdy nowe konto zostanie dodane
 	});
 	document.getElementById('btnErrorBack').addEventListener('click', determineAndShowView);
 	document.getElementById('btnLogsBack').addEventListener('click', determineAndShowView);
@@ -1170,7 +1171,7 @@ function renderNipList() {
 		const card = document.createElement('div');
 		card.className = 'nip-card' + (isActive ? ' nip-card--active' : '');
 
-		// Nagłówek karty: NIP + środowisko + usuń
+		// Nagłówek: NIP + środowisko + kosz
 		const header = document.createElement('div');
 		header.className = 'nip-card-header';
 
@@ -1183,58 +1184,106 @@ function renderNipList() {
 		const envLabels = { production: 'PRD', demo: 'DEMO', test: 'TEST' };
 		envBadge.textContent = envLabels[account.environment] ?? 'PRD';
 
-		const btnRemove = document.createElement('button');
-		btnRemove.className = 'nip-list-remove';
-		btnRemove.textContent = '✕';
-		btnRemove.setAttribute('aria-label', `Usuń NIP ${account.nip}`);
-		btnRemove.addEventListener('click', () => handleRemoveNip(account.nip));
-
-		header.appendChild(nipLabel);
-		header.appendChild(envBadge);
-		header.appendChild(btnRemove);
-
-		// Edycja nazwy firmy inline
-		const nameRow = document.createElement('div');
-		nameRow.className = 'nip-card-name-row';
-
-		const nameInput = document.createElement('input');
-		nameInput.type = 'text';
-		nameInput.className = 'nip-card-name-input';
-		nameInput.value = account.companyName ?? '';
-		nameInput.placeholder = 'Nazwa firmy (opcjonalnie)';
-		nameInput.setAttribute('aria-label', `Nazwa firmy dla NIP ${account.nip}`);
-
-		nameInput.addEventListener('change', async () => {
-			const newName = nameInput.value.trim() || null;
-			const raw = await chrome.storage.local.get('accounts');
-			const stored = raw.accounts ?? {};
-			if (stored[account.nip]) {
-				stored[account.nip].companyName = newName;
-				await chrome.storage.local.set({ accounts: stored });
-			}
-			account.companyName = newName;
-			// Odśwież NipSelector jeśli to aktywny NIP
-			if (account.nip === activeNip) renderNipSelector();
-		});
-
-		nameRow.appendChild(nameInput);
-
-		// Przycisk aktywacji – tylko dla nieaktywnych
 		if (!isActive) {
 			const btnActivate = document.createElement('button');
 			btnActivate.className = 'nip-card-activate';
 			btnActivate.textContent = 'Przełącz';
 			btnActivate.addEventListener('click', async () => {
 				await switchNip(account.nip);
-				renderNipList(); // odśwież karty
+				renderNipList();
 			});
-			nameRow.appendChild(btnActivate);
+			header.appendChild(nipLabel);
+			header.appendChild(envBadge);
+			header.appendChild(btnActivate);
 		} else {
 			const activeMark = document.createElement('span');
 			activeMark.className = 'nip-card-active-mark';
 			activeMark.textContent = '✓ aktywny';
-			nameRow.appendChild(activeMark);
+			header.appendChild(nipLabel);
+			header.appendChild(envBadge);
+			header.appendChild(activeMark);
 		}
+
+		// Nazwa firmy – edytowalne pole z ikonką ✏️/✓
+		const nameRow = document.createElement('div');
+		nameRow.className = 'nip-card-name-row';
+
+		const nameWrap = document.createElement('div');
+		nameWrap.style.cssText = 'position:relative;flex:1;min-width:0;';
+
+		const nameInput = document.createElement('input');
+		nameInput.type = 'text';
+		nameInput.className = 'nip-card-name-input';
+		nameInput.value = account.companyName ?? '';
+		nameInput.placeholder = 'Nazwa firmy (opcjonalnie)';
+		nameInput.readOnly = true;
+		nameInput.style.cursor = 'default';
+		nameInput.setAttribute('aria-label', `Nazwa firmy dla NIP ${account.nip}`);
+
+		const editHint = document.createElement('span');
+		editHint.style.cssText =
+			'position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:12px;cursor:pointer;';
+		editHint.textContent = '✏️';
+		editHint.setAttribute('role', 'button');
+		editHint.setAttribute('tabindex', '0');
+		editHint.setAttribute('aria-label', 'Edytuj nazwę firmy');
+
+		const saveName = async () => {
+			const newName = nameInput.value.trim() || null;
+			account.companyName = newName;
+			const raw = await chrome.storage.local.get('accounts');
+			const stored = raw.accounts ?? {};
+			if (stored[account.nip]) {
+				stored[account.nip].companyName = newName;
+				await chrome.storage.local.set({ accounts: stored });
+			}
+			nameInput.readOnly = true;
+			nameInput.style.cursor = 'default';
+			editHint.textContent = '✏️';
+			if (account.nip === activeNip) renderNipSelector();
+		};
+
+		editHint.addEventListener('click', () => {
+			if (!nameInput.readOnly) {
+				saveName();
+			} else {
+				nameInput.readOnly = false;
+				nameInput.style.cursor = 'text';
+				nameInput.focus();
+				nameInput.select();
+				editHint.textContent = '✓';
+			}
+		});
+		editHint.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				editHint.click();
+			}
+		});
+		nameInput.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				saveName();
+			}
+			if (e.key === 'Escape') {
+				nameInput.value = account.companyName ?? '';
+				nameInput.readOnly = true;
+				nameInput.style.cursor = 'default';
+				editHint.textContent = '✏️';
+			}
+		});
+
+		nameWrap.appendChild(nameInput);
+		nameWrap.appendChild(editHint);
+
+		const btnRemove = document.createElement('button');
+		btnRemove.className = 'nip-list-remove';
+		btnRemove.innerHTML = '🗑️';
+		btnRemove.setAttribute('aria-label', `Usuń NIP ${account.nip}`);
+		btnRemove.addEventListener('click', () => handleRemoveNip(account.nip));
+
+		nameRow.appendChild(nameWrap);
+		nameRow.appendChild(btnRemove);
 
 		card.appendChild(header);
 		card.appendChild(nameRow);
