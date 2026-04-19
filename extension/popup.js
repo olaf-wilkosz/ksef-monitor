@@ -42,6 +42,7 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
 			return;
 		}
 		renderMainView();
+		showView('viewMain');
 	}
 });
 
