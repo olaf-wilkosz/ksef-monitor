@@ -227,19 +227,6 @@ function renderMainView() {
 
 	renderStatusBadge();
 	renderInvoiceList(pending, archive);
-
-	// Kompensuj wysokość listy faktur o wysokość NipSelectora
-	// żeby łączna wysokość main view była zawsze stała
-	requestAnimationFrame(() => {
-		const nipSel = document.getElementById('nipSelector');
-		const list = document.getElementById('invoiceList');
-		if (!list) return;
-		const nipH =
-			nipSel && nipSel.style.display !== 'none'
-				? nipSel.getBoundingClientRect().height + 8 // +8px margin-bottom
-				: 0;
-		list.style.height = `${320 - nipH}px`;
-	});
 }
 
 // ─── NipSelector ─────────────────────────────────────────────────────────────
