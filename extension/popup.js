@@ -30,20 +30,31 @@ let toastBulkSnapshot = null;
 // Reaguj na zmiany storage gdy popup jest otwarty
 chrome.storage.onChanged.addListener(async (changes, area) => {
 	if (area !== 'local') return;
-	if (changes.accounts) {
-		await loadState();
-		const ps = activePollState();
-		if (ps.needsNewToken) {
-			showView('viewNewToken');
-			return;
-		}
-		if (ps.needsPin) {
-			showView('viewPin');
-			return;
-		}
-		renderMainView();
-		showView('viewMain');
+	if (!changes.accounts) return;
+
+	// Reaguj tylko gdy zmienia się lista NIP-ów (dodanie/usunięcie konta),
+	// nie przy każdej aktualizacji pollState/invoiceState
+	const prevNips = new Set(Object.keys(changes.accounts.oldValue ?? {}));
+	const currNips = new Set(Object.keys(changes.accounts.newValue ?? {}));
+	const nipListChanged = prevNips.size !== currNips.size || [...currNips].some((n) => !prevNips.has(n));
+
+	if (!nipListChanged) return;
+
+	await loadState();
+	const ps = activePollState();
+	if (ps.needsNewToken) {
+		showView('viewNewToken');
+		return;
 	}
+	if (ps.needsPin) {
+		showView('viewPin');
+		return;
+	}
+
+	// Wróć do ustawień – użytkownik widzi zaktualizowaną listę NIP-ów
+	// i może od razu dodać kolejny
+	renderMainView();
+	showSettingsView();
 });
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
