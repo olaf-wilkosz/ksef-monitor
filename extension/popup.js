@@ -72,7 +72,7 @@ window.addEventListener('focus', async () => {
 	const currNips = accounts.map((a) => a.nip).join(',');
 	if (currNips !== prevNips) {
 		renderMainView();
-		showView('viewMain');
+		showSettingsView();
 	}
 });
 
@@ -1460,7 +1460,7 @@ async function handleRemoveNip(nip) {
 		} else {
 			await loadState();
 			renderMainView();
-			showView('viewMain');
+			showSettingsView();
 		}
 	});
 }
