@@ -9,8 +9,8 @@
  *  - Obsługa wygasłej sesji: needsPin = true, ZERO backoffu
  */
 
-import { decryptToken, encryptToken }                    from './crypto-utils.js';
-import { KSeFClient, KSeFError, authenticateWithToken }  from './ksef-api.js';
+import { decryptToken, encryptToken } from './crypto-utils.js';
+import { KSeFClient, KSeFError, authenticateWithToken } from './ksef-api.js';
 import {
 	migrateToMultiNip,
 	getConfig,
@@ -50,7 +50,7 @@ import {
 	undoDismissArchive,
 } from './storage.js';
 
-const ALARM_PREFIX  = 'ksef-poll-';
+const ALARM_PREFIX = 'ksef-poll-';
 const RESTORE_ALARM = 'ksef-poll-restore';
 
 // ─── Start ────────────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ function nipFromAlarm(name) {
 async function setupAlarms() {
 	if (!(await hasAnyAccount())) return;
 	const config = await getConfig();
-	const nips   = await getNipList();
+	const nips = await getNipList();
 	for (const nip of nips) {
 		const account = await getAccount(nip);
 		await ensureAlarm(nip, config.pollIntervalMinutes, account.pollOffset ?? 0);
@@ -102,7 +102,7 @@ async function ensureAlarm(nip, intervalMinutes, offsetMs = 0) {
 	if (existing) return;
 	const delayMs = intervalMinutes * 60_000 + offsetMs;
 	await chrome.alarms.create(alarmName(nip), {
-		delayInMinutes:  delayMs / 60_000,
+		delayInMinutes: delayMs / 60_000,
 		periodInMinutes: intervalMinutes,
 	});
 }
@@ -137,7 +137,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 			switch (message.type) {
 				case 'POLL_NOW': {
 					const nip = message.nip ?? activeNip;
-					if (!nip) { sendResponse({ ok: false, error: 'Brak aktywnego NIP-a' }); break; }
+					if (!nip) {
+						sendResponse({ ok: false, error: 'Brak aktywnego NIP-a' });
+						break;
+					}
 					await runPoll(nip, message.pin);
 					const psAfter = await getPollState(nip);
 					sendResponse({ ok: !psAfter.needsPin && !psAfter.needsNewToken });
@@ -152,11 +155,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					} catch (err) {
 						const is450 = err.status === 450 || err.code === 'AUTH_FAILED_450';
 						sendResponse({
-							ok:    false,
+							ok: false,
 							error: is450
 								? 'Token unieważniony lub błędny. Wygeneruj nowy token w portalu KSeF.'
 								: err.message || 'Błąd autoryzacji',
-							code:  err.code || (is450 ? 'AUTH_FAILED_450' : 'AUTH_ERROR'),
+							code: err.code || (is450 ? 'AUTH_FAILED_450' : 'AUTH_ERROR'),
 						});
 					}
 					break;
@@ -166,10 +169,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 					// Onboarding: zaszyfruj token, dodaj konto, zainicjalizuj archiwum
 					const { pin, nip, environment, companyName } = message;
 					try {
-						const cfg        = await getConfig();
-						const encrypted  = await getEncryptedToken(nip);
+						const cfg = await getConfig();
+						const encrypted = await getEncryptedToken(nip);
 						// encryptedToken już zapisany przez onboarding.js przed wysłaniem wiadomości
-						const result     = await testConnection(nip, pin);
+						const result = await testConnection(nip, pin);
 						sendResponse({ ok: true, ...result });
 					} catch (err) {
 						sendResponse({ ok: false, error: err.message });
@@ -221,13 +224,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				case 'OPEN_ONBOARDING': {
 					const { mode } = message;
 					const url = chrome.runtime.getURL(`onboarding.html${mode === 'add' ? '?mode=add' : ''}`);
-					const W = 580, H = 680, MARGIN = 16;
-					let left = 100, top = 60;
+					const W = 580,
+						H = 680,
+						MARGIN = 16;
+					let left = 100,
+						top = 60;
 					try {
 						const win = await chrome.windows.getLastFocused({ windowTypes: ['normal'] });
 						if (win) {
 							left = (win.left ?? 0) + (win.width ?? 1200) - W - MARGIN;
-							top  = (win.top  ?? 0) + MARGIN;
+							top = (win.top ?? 0) + MARGIN;
 						}
 					} catch {}
 					await chrome.windows.create({ url, type: 'popup', width: W, height: H, left, top, focused: true });
@@ -257,14 +263,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 				case 'CLEAR_BACKOFF': {
 					const nip = message.nip ?? activeNip;
-					if (!nip) { sendResponse({ ok: true }); break; }
+					if (!nip) {
+						sendResponse({ ok: true });
+						break;
+					}
 					const ps = await getPollState(nip);
 					await savePollState(nip, {
 						...ps,
 						consecutiveErrors: 0,
-						backoffUntil:      null,
-						needsPin:          false,
-						lastError:         null,
+						backoffUntil: null,
+						needsPin: false,
+						lastError: null,
 					});
 					sendResponse({ ok: true });
 					break;
@@ -273,10 +282,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				case 'VERIFY_PIN': {
 					// Weryfikacja PIN przez próbę deszyfrowania – używana przy UI-lock
 					const nip = activeNip ?? (await getNipList())[0];
-					if (!nip) { sendResponse({ ok: false, error: 'Brak konta' }); break; }
+					if (!nip) {
+						sendResponse({ ok: false, error: 'Brak konta' });
+						break;
+					}
 					try {
 						const encrypted = await getEncryptedToken(nip);
-						if (!encrypted) { sendResponse({ ok: false, error: 'Brak tokenu' }); break; }
+						if (!encrypted) {
+							sendResponse({ ok: false, error: 'Brak tokenu' });
+							break;
+						}
 						await decryptToken(encrypted, message.pin);
 						sendResponse({ ok: true });
 					} catch {
@@ -304,7 +319,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 				case 'REINITIALIZE_ARCHIVE': {
 					const nip = message.nip ?? activeNip;
-					if (!nip) { sendResponse({ ok: false, error: 'Brak aktywnego NIP-a' }); break; }
+					if (!nip) {
+						sendResponse({ ok: false, error: 'Brak aktywnego NIP-a' });
+						break;
+					}
 					const { count, pendingCount } = await reinitializeArchive(nip, message.pin ?? null);
 					await updateTotalBadge();
 					sendResponse({ ok: true, count });
@@ -350,36 +368,43 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 				}
 
 				case 'UNDO_MARK_ALL': {
-					const nip      = message.nip ?? activeNip;
+					const nip = message.nip ?? activeNip;
 					const invState = await getInvoiceState(nip);
 					const restored = message.invoices ?? [];
 					const restoredIds = new Set(restored.map((i) => i.id));
 					await saveInvoiceState(nip, {
 						...invState,
 						pendingInvoices: [...restored, ...invState.pendingInvoices],
-						recentArchive:   invState.recentArchive.filter((i) => !restoredIds.has(i.id)),
+						recentArchive: invState.recentArchive.filter((i) => !restoredIds.has(i.id)),
 					});
 					await updateTotalBadge();
 					sendResponse({ ok: true });
 					break;
 				}
 
-			// Zwraca listę NIP-ów z ich pollState i liczbą pending – dla popup NipSelector
+				// Zwraca listę NIP-ów z ich pollState i liczbą pending – dla popup NipSelector
 				case 'GET_ACCOUNTS_SUMMARY': {
-					const nips    = await getNipList();
-					const summary = await Promise.all(nips.map(async (nip) => {
-						const account = await getAccount(nip);
-						return {
+					// Czytamy raz atomicznie – eliminuje race condition
+					const result = await chrome.storage.local.get(['accounts', 'activeNip']);
+					const stored = result.accounts ?? {};
+					const currentActiveNip = result.activeNip ?? null;
+					const summary = Object.entries(stored)
+						.filter(([, account]) => account !== null && account !== undefined)
+						.map(([nip, account]) => ({
 							nip,
-							companyName:  account.companyName,
-							environment:  account.environment,
+							companyName: account.companyName ?? null,
+							environment: account.environment ?? 'production',
 							pendingCount: account.invoiceState?.pendingInvoices?.length ?? 0,
-							pollState:    account.pollState,
-							authState:    account.authState,
-							invoiceState: account.invoiceState ?? { allSeenIds: [], pendingInvoices: [], recentArchive: [], lastQueryTime: null },
-						};
-					}));
-					sendResponse({ ok: true, accounts: summary, activeNip });
+							pollState: account.pollState ?? {},
+							authState: account.authState ?? {},
+							invoiceState: account.invoiceState ?? {
+								allSeenIds: [],
+								pendingInvoices: [],
+								recentArchive: [],
+								lastQueryTime: null,
+							},
+						}));
+					sendResponse({ ok: true, accounts: summary, activeNip: currentActiveNip });
 					break;
 				}
 
@@ -389,11 +414,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 		} catch (err) {
 			console.error('[KSeF Monitor] Błąd obsługi wiadomości:', err);
 			sendResponse({
-				ok:     false,
-				error:  [err.message, err.code ? `[${err.code}]` : '', err.status ? `HTTP ${err.status}` : '']
+				ok: false,
+				error: [err.message, err.code ? `[${err.code}]` : '', err.status ? `HTTP ${err.status}` : '']
 					.filter(Boolean)
 					.join(' '),
-				code:   err.code,
+				code: err.code,
 				status: err.status,
 			});
 		}
@@ -411,20 +436,20 @@ async function runPoll(nip, pin = null) {
 	if (ps.backoffUntil && new Date(ps.backoffUntil) > new Date()) return;
 
 	const account = await getAccount(nip);
-	const config  = await getConfig();
-	const client  = new KSeFClient(account.environment);
+	const config = await getConfig();
+	const client = new KSeFClient(account.environment);
 
 	try {
 		const accessToken = await getOrRefreshAccessToken(nip, config, pin, client, ps);
 
-		const invState     = await getInvoiceState(nip);
+		const invState = await getInvoiceState(nip);
 		const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 3_600_000);
 		const since = invState.lastQueryTime
 			? new Date(Math.max(new Date(invState.lastQueryTime).getTime(), ninetyDaysAgo.getTime()))
 			: ninetyDaysAgo;
 
 		const { invoices } = await client.queryInvoiceMetadata(accessToken, since);
-		const newCount     = await updateInvoices(nip, invoices);
+		const newCount = await updateInvoices(nip, invoices);
 
 		await ensureArchiveBackfill(nip, invoices);
 		const updated = await getInvoiceState(nip);
@@ -464,8 +489,8 @@ async function runPoll(nip, pin = null) {
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 async function getOrRefreshAccessToken(nip, config, pin, client, ps) {
-	const auth       = await getAuthState(nip);
-	const account    = await getAccount(nip);
+	const auth = await getAuthState(nip);
+	const account = await getAccount(nip);
 	const pinRequired = ps.needsPin;
 
 	if (!pin || !pinRequired) {
@@ -476,7 +501,7 @@ async function getOrRefreshAccessToken(nip, config, pin, client, ps) {
 
 		// 2. refreshToken z local storage
 		if (auth.refreshToken && auth.refreshTokenExpiry > Date.now() + 60_000) {
-			const REFRESH_RETRIES  = 3;
+			const REFRESH_RETRIES = 3;
 			const REFRESH_DELAY_MS = 5_000;
 			let lastRefreshErr;
 			for (let attempt = 1; attempt <= REFRESH_RETRIES; attempt++) {
@@ -486,9 +511,7 @@ async function getOrRefreshAccessToken(nip, config, pin, client, ps) {
 					return newAuth.accessToken;
 				} catch (err) {
 					lastRefreshErr = err;
-					const retriable =
-						!(err instanceof KSeFError) ||
-						(err instanceof KSeFError && err.status >= 500);
+					const retriable = !(err instanceof KSeFError) || (err instanceof KSeFError && err.status >= 500);
 					if (retriable && attempt < REFRESH_RETRIES) {
 						await new Promise((r) => setTimeout(r, REFRESH_DELAY_MS));
 						continue;
@@ -528,8 +551,8 @@ async function getOrRefreshAccessToken(nip, config, pin, client, ps) {
 		throw new KSeFError(401, 'AUTH_REQUIRED', 'Sesja wygasła. Otwórz rozszerzenie i wprowadź PIN.');
 	}
 
-	const encrypted  = await getEncryptedToken(nip);
-	const ksefToken  = await decryptToken(encrypted, pin);
+	const encrypted = await getEncryptedToken(nip);
+	const ksefToken = await decryptToken(encrypted, pin);
 	await clearAuthState(nip);
 	const newAuth = await authenticateWithToken(ksefToken, nip, account.environment);
 	await saveAuthState(nip, newAuth);
@@ -540,17 +563,17 @@ async function getOrRefreshAccessToken(nip, config, pin, client, ps) {
 // ─── Test połączenia (onboarding) ─────────────────────────────────────────────
 
 async function testConnection(nip, pin) {
-	const account   = await getAccount(nip);
+	const account = await getAccount(nip);
 	const encrypted = await getEncryptedToken(nip);
 	if (!encrypted) throw new Error('Brak zapisanego tokenu.');
 
 	const ksefToken = await decryptToken(encrypted, pin);
-	const auth      = await authenticateWithToken(ksefToken, nip, account.environment);
+	const auth = await authenticateWithToken(ksefToken, nip, account.environment);
 	await saveAuthState(nip, auth);
 	await saveKsefTokenPlain(nip, ksefToken);
 
 	const client = new KSeFClient(account.environment);
-	const since  = new Date(Date.now() - 90 * 24 * 3_600_000);
+	const since = new Date(Date.now() - 90 * 24 * 3_600_000);
 	const result = await client.queryInvoiceMetadata(auth.accessToken, since);
 
 	const pendingCount = await initializeArchive(nip, result.invoices);
@@ -559,21 +582,24 @@ async function testConnection(nip, pin) {
 
 	return {
 		authenticated: true,
-		invoiceCount:  pendingCount,
-		message:       `Połączono pomyślnie. Faktur z bieżącego miesiąca: ${pendingCount}`,
+		invoiceCount: pendingCount,
+		message: `Połączono pomyślnie. Faktur z bieżącego miesiąca: ${pendingCount}`,
 	};
 }
 
 // ─── Badge (zagregowany) ──────────────────────────────────────────────────────
 
 async function updateTotalBadge() {
-	const nips  = await getNipList();
-	let total   = 0;
+	const nips = await getNipList();
+	let total = 0;
 	let hasAnyNeedsNewToken = false;
 
 	for (const nip of nips) {
 		const account = await getAccount(nip);
-		if (account?.pollState?.needsNewToken) { hasAnyNeedsNewToken = true; break; }
+		if (account?.pollState?.needsNewToken) {
+			hasAnyNeedsNewToken = true;
+			break;
+		}
 		total += account?.invoiceState?.pendingInvoices?.length ?? 0;
 	}
 
@@ -609,21 +635,19 @@ async function maybeNotify(count, invoices, companyName) {
 	const config = await getConfig();
 	if (!config.notificationsEnabled) return;
 
-	const noun  = count === 1 ? 'nowa faktura' : count < 5 ? 'nowe faktury' : 'nowych faktur';
-	const title = companyName
-		? `📄 ${companyName}: ${count} ${noun}`
-		: `📄 KSeF: ${count} ${noun}`;
+	const noun = count === 1 ? 'nowa faktura' : count < 5 ? 'nowe faktury' : 'nowych faktur';
+	const title = companyName ? `📄 ${companyName}: ${count} ${noun}` : `📄 KSeF: ${count} ${noun}`;
 	const items = invoices.slice(0, 4).map((inv) => ({
-		title:   truncate(inv.sellerName, 40),
+		title: truncate(inv.sellerName, 40),
 		message: inv.invoiceNumber || inv.issueDate?.substring(0, 10) || '',
 	}));
 
 	await chrome.notifications.create(`ksef-new-invoices-${Date.now()}`, {
-		type:               items.length > 1 ? 'list' : 'basic',
-		iconUrl:            'icons/icon48.png',
+		type: items.length > 1 ? 'list' : 'basic',
+		iconUrl: 'icons/icon48.png',
 		title,
-		message:            items[0]?.title ?? 'Otwórz rozszerzenie, aby zobaczyć',
-		items:              items.length > 1 ? items : undefined,
+		message: items[0]?.title ?? 'Otwórz rozszerzenie, aby zobaczyć',
+		items: items.length > 1 ? items : undefined,
 		requireInteraction: false,
 	});
 }
@@ -635,17 +659,17 @@ async function maybeNotifyNeedsPin(companyName) {
 		? `🔑 KSeF Monitor (${companyName}): wymagane zalogowanie`
 		: '🔑 KSeF Monitor: wymagane zalogowanie';
 	await chrome.notifications.create(`ksef-needs-pin-${Date.now()}`, {
-		type:               'basic',
-		iconUrl:            'icons/icon48.png',
+		type: 'basic',
+		iconUrl: 'icons/icon48.png',
 		title,
-		message:            'Sesja wygasła. Kliknij ikonę rozszerzenia i wprowadź PIN.',
+		message: 'Sesja wygasła. Kliknij ikonę rozszerzenia i wprowadź PIN.',
 		requireInteraction: true,
 	});
 }
 
 async function notifyError(title, message) {
 	await chrome.notifications.create('ksef-error', {
-		type:    'basic',
+		type: 'basic',
 		iconUrl: 'icons/icon48.png',
 		title,
 		message,
@@ -656,22 +680,22 @@ async function notifyError(title, message) {
 
 async function reinitializeArchive(nip, pin = null) {
 	const account = await getAccount(nip);
-	const config  = await getConfig();
-	const client  = new KSeFClient(account.environment);
-	const ps      = await getPollState(nip);
-	const token   = await getOrRefreshAccessToken(nip, config, pin, client, ps);
-	const since   = new Date(Date.now() - 90 * 24 * 3_600_000);
-	const result  = await client.queryInvoiceMetadata(token, since);
+	const config = await getConfig();
+	const client = new KSeFClient(account.environment);
+	const ps = await getPollState(nip);
+	const token = await getOrRefreshAccessToken(nip, config, pin, client, ps);
+	const since = new Date(Date.now() - 90 * 24 * 3_600_000);
+	const result = await client.queryInvoiceMetadata(token, since);
 	const pendingCount = await initializeArchive(nip, result.invoices);
 	return { count: result.invoices.length, pendingCount };
 }
 
 async function rescheduleAlarmAfterBackoff(nip, retryAfterSeconds) {
 	await clearAlarm(nip);
-	const config     = await getConfig();
+	const config = await getConfig();
 	const backoffMin = Math.max(config.pollIntervalMinutes, Math.ceil(retryAfterSeconds / 60));
 	await chrome.alarms.create(alarmName(nip), {
-		delayInMinutes:  backoffMin,
+		delayInMinutes: backoffMin,
 		periodInMinutes: config.pollIntervalMinutes,
 	});
 	// Zaplanuj przywrócenie normalnego interwału przez alarm (nie setTimeout – SW może zasnąć)
