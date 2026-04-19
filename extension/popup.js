@@ -53,6 +53,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 	bindEvents();
 });
 
+// Odśwież stan gdy popup odzyska focus (np. po zamknięciu okna onboardingu)
+window.addEventListener('focus', async () => {
+	const before = accounts.length;
+	await loadState();
+	if (accounts.length !== before) {
+		// Liczba kont się zmieniła – przerenderuj widok
+		renderMainView();
+		showView('viewMain');
+	}
+});
+
 async function loadState() {
 	// Globalna konfiguracja
 	const cfgResult = await chrome.storage.local.get('config');
@@ -209,17 +220,18 @@ function renderNipSelector() {
 	}
 
 	container.style.display = 'flex';
+	container.style.flexDirection = 'column';
 	container.innerHTML = '';
 
-	if (accounts.length === 2) {
-		// Dwa NIP-y → dwa przyciski side by side
+	if (accounts.length <= 3) {
+		// Do 3 NIP-ów → przyciski w kolumnie
 		accounts.forEach((account) => {
 			const btn = document.createElement('button');
 			btn.className = 'nip-btn' + (account.nip === activeNip ? ' active' : '');
-			const label = account.companyName ? trunc(account.companyName, 14) : 'NIP ' + account.nip.slice(-4);
+			const name = account.companyName ? trunc(account.companyName, 22) : `NIP ${account.nip}`;
 			const badge = account.pendingCount > 0 ? ` <span class="nip-badge">${account.pendingCount}</span>` : '';
-			btn.innerHTML = escHtml(label) + badge;
-			btn.setAttribute('aria-label', `${label}, ${account.pendingCount} nowych`);
+			btn.innerHTML = escHtml(name) + badge;
+			btn.setAttribute('aria-label', `${name}, ${account.pendingCount} nowych`);
 			btn.addEventListener('click', () => switchNip(account.nip));
 			container.appendChild(btn);
 		});
@@ -1131,25 +1143,18 @@ function showSettingsView() {
 	const selectEnv = document.getElementById('selectEnv');
 	if (selectEnv) selectEnv.value = account?.environment ?? 'production';
 
-	// Nazwa firmy / NIP per aktywny NIP
-	const companyEl = document.getElementById('settingsCompany');
-	const companyInput = document.getElementById('settingsCompanyInput');
-	if (account?.nip) {
-		const label = '🏢 NIP ' + account.nip + (account.companyName ? '  ·  ' + account.companyName : '');
-		companyInput.value = label;
-		companyEl.style.display = 'block';
-	} else {
-		companyEl.style.display = 'none';
-	}
-
 	document.getElementById('toggleNotifications').checked = !!config.notificationsEnabled;
+
+	// Ukryj stare pole nazwy firmy – zastąpione przez karty NIP-ów
+	const companyEl = document.getElementById('settingsCompany');
+	if (companyEl) companyEl.style.display = 'none';
 
 	// Lista NIP-ów z przyciskami usuwania
 	renderNipList();
 
 	// "Usuń token" jest redundantny gdy lista NIP-ów jest widoczna (ma własne "X")
 	const btnRemove = document.getElementById('btnRemoveToken');
-	if (btnRemove) btnRemove.style.display = accounts.length > 0 ? 'none' : '';
+	if (btnRemove) btnRemove.style.display = 'none';
 
 	showView('viewSettings');
 }
@@ -1160,13 +1165,23 @@ function renderNipList() {
 	container.innerHTML = '';
 
 	accounts.forEach((account) => {
-		const row = document.createElement('div');
-		row.className = 'nip-list-row';
+		const isActive = account.nip === activeNip;
 
-		const label = document.createElement('span');
-		label.className = 'nip-list-label';
-		label.textContent = account.companyName ? `${account.companyName} (${account.nip})` : `NIP ${account.nip}`;
-		if (account.nip === activeNip) label.style.fontWeight = '600';
+		const card = document.createElement('div');
+		card.className = 'nip-card' + (isActive ? ' nip-card--active' : '');
+
+		// Nagłówek karty: NIP + środowisko + usuń
+		const header = document.createElement('div');
+		header.className = 'nip-card-header';
+
+		const nipLabel = document.createElement('span');
+		nipLabel.className = 'nip-card-nip';
+		nipLabel.textContent = account.nip;
+
+		const envBadge = document.createElement('span');
+		envBadge.className = 'nip-card-env';
+		const envLabels = { production: 'PRD', demo: 'DEMO', test: 'TEST' };
+		envBadge.textContent = envLabels[account.environment] ?? 'PRD';
 
 		const btnRemove = document.createElement('button');
 		btnRemove.className = 'nip-list-remove';
@@ -1174,9 +1189,56 @@ function renderNipList() {
 		btnRemove.setAttribute('aria-label', `Usuń NIP ${account.nip}`);
 		btnRemove.addEventListener('click', () => handleRemoveNip(account.nip));
 
-		row.appendChild(label);
-		row.appendChild(btnRemove);
-		container.appendChild(row);
+		header.appendChild(nipLabel);
+		header.appendChild(envBadge);
+		header.appendChild(btnRemove);
+
+		// Edycja nazwy firmy inline
+		const nameRow = document.createElement('div');
+		nameRow.className = 'nip-card-name-row';
+
+		const nameInput = document.createElement('input');
+		nameInput.type = 'text';
+		nameInput.className = 'nip-card-name-input';
+		nameInput.value = account.companyName ?? '';
+		nameInput.placeholder = 'Nazwa firmy (opcjonalnie)';
+		nameInput.setAttribute('aria-label', `Nazwa firmy dla NIP ${account.nip}`);
+
+		nameInput.addEventListener('change', async () => {
+			const newName = nameInput.value.trim() || null;
+			const raw = await chrome.storage.local.get('accounts');
+			const stored = raw.accounts ?? {};
+			if (stored[account.nip]) {
+				stored[account.nip].companyName = newName;
+				await chrome.storage.local.set({ accounts: stored });
+			}
+			account.companyName = newName;
+			// Odśwież NipSelector jeśli to aktywny NIP
+			if (account.nip === activeNip) renderNipSelector();
+		});
+
+		nameRow.appendChild(nameInput);
+
+		// Przycisk aktywacji – tylko dla nieaktywnych
+		if (!isActive) {
+			const btnActivate = document.createElement('button');
+			btnActivate.className = 'nip-card-activate';
+			btnActivate.textContent = 'Przełącz';
+			btnActivate.addEventListener('click', async () => {
+				await switchNip(account.nip);
+				renderNipList(); // odśwież karty
+			});
+			nameRow.appendChild(btnActivate);
+		} else {
+			const activeMark = document.createElement('span');
+			activeMark.className = 'nip-card-active-mark';
+			activeMark.textContent = '✓ aktywny';
+			nameRow.appendChild(activeMark);
+		}
+
+		card.appendChild(header);
+		card.appendChild(nameRow);
+		container.appendChild(card);
 	});
 }
 

@@ -19,6 +19,7 @@
 				color: #1a1a2e;
 				background: #fff;
 				width: 340px;
+				min-height: 320px;
 			}
 
 			/* ── Header ── */
@@ -55,7 +56,7 @@
 
 			/* ── Setup ── */
 			.setup-wrap {
-				padding: 16px;
+				padding: 14px;
 			}
 			.setup-info {
 				background: #e8f0f8;
@@ -69,7 +70,7 @@
 
 			/* ── PIN ── */
 			.pin-wrap {
-				padding: 16px;
+				padding: 14px;
 				text-align: center;
 			}
 			.pin-title {
@@ -164,7 +165,7 @@
 
 			/* ── Main ── */
 			.main-wrap {
-				padding: 10px 12px 0;
+				padding: 10px 14px 0;
 			}
 
 			/* Status row */
@@ -629,7 +630,7 @@
 
 			/* ── Logs view ── */
 			.logs-wrap {
-				padding: 12px 14px 14px;
+				padding: 14px;
 				display: flex;
 				flex-direction: column;
 				height: 100%;
@@ -891,7 +892,7 @@
 
 			/* ── Error ── */
 			.error-wrap {
-				padding: 16px;
+				padding: 14px;
 				text-align: center;
 			}
 
@@ -935,22 +936,23 @@
 			}
 
 			/* ── NipSelector ── */
+			#nipSelector {
+				flex-direction: column;
+			}
 			.nip-btn {
-				flex: 1;
-				padding: 5px 8px;
+				width: 100%;
+				padding: 6px 10px;
 				border: 1.5px solid #d0e4f0;
 				border-radius: 7px;
 				background: #f5f8fb;
 				color: #013f71;
-				font-size: 11px;
+				font-size: 12px;
 				font-weight: 500;
 				cursor: pointer;
 				transition:
 					background 0.12s,
 					border-color 0.12s;
-				white-space: nowrap;
-				overflow: hidden;
-				text-overflow: ellipsis;
+				text-align: left;
 			}
 			.nip-btn:hover {
 				background: #e8f0f8;
@@ -988,22 +990,76 @@
 				color: #013f71;
 			}
 
-			/* ── NIP list w ustawieniach ── */
-			.nip-list-row {
-				display: flex;
-				align-items: center;
-				justify-content: space-between;
-				padding: 6px 8px;
+			/* ── NIP cards w ustawieniach ── */
+			.nip-card {
 				border: 1px solid #e6edf4;
-				border-radius: 6px;
-				margin-bottom: 5px;
+				border-radius: 8px;
+				padding: 8px 10px;
+				margin-bottom: 6px;
 				background: #fafafa;
 			}
-			.nip-list-label {
+			.nip-card--active {
+				border-color: #b0c8e0;
+				background: #edf2f7;
+			}
+			.nip-card-header {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				margin-bottom: 6px;
+			}
+			.nip-card-nip {
 				font-size: 12px;
+				font-weight: 600;
+				color: #013f71;
+				flex: 1;
+			}
+			.nip-card-env {
+				font-size: 10px;
+				background: rgba(1, 63, 113, 0.1);
+				color: #013f71;
+				padding: 1px 6px;
+				border-radius: 8px;
+				font-weight: 600;
+			}
+			.nip-card-name-row {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+			}
+			.nip-card-name-input {
+				flex: 1;
+				border: 1px solid #ddd;
+				border-radius: 6px;
+				padding: 4px 8px;
+				font-size: 12px;
+				font-family: inherit;
+				background: white;
 				color: #333;
-				overflow: hidden;
-				text-overflow: ellipsis;
+				min-width: 0;
+			}
+			.nip-card-name-input:focus {
+				outline: none;
+				border-color: #013f71;
+			}
+			.nip-card-activate {
+				background: none;
+				border: 1px solid #d0e4f0;
+				border-radius: 5px;
+				color: #013f71;
+				font-size: 11px;
+				cursor: pointer;
+				padding: 3px 8px;
+				flex-shrink: 0;
+				white-space: nowrap;
+			}
+			.nip-card-activate:hover {
+				background: #e8f0f8;
+			}
+			.nip-card-active-mark {
+				font-size: 11px;
+				color: #2e7d32;
+				flex-shrink: 0;
 				white-space: nowrap;
 			}
 			.nip-list-remove {
@@ -1015,7 +1071,6 @@
 				cursor: pointer;
 				padding: 2px 7px;
 				flex-shrink: 0;
-				margin-left: 8px;
 				transition:
 					background 0.12s,
 					color 0.12s,
