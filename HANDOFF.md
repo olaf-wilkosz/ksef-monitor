@@ -238,7 +238,7 @@ Jeśli zmienią się marginesy/paddingi elementów – zaktualizuj stałe.
 - Store URL: https://addons.mozilla.org/pl/firefox/addon/ksef-monitor/
 - gecko.id: `ksef-monitor@pm.me`
 - strict_min_version: 140.0
-- Status: v1.0.3 złożone ręcznie; od v1.1.0 automatyczne przez GitHub Actions (`web-ext sign`)
+- Status: v1.0.3 opublikowane; od v1.1.0 automatyczne przez GitHub Actions (`web-ext sign`)
 - Secrets: `AMO_ISSUER`, `AMO_SECRET` w GitHub Secrets
 - Uwaga: polityka prywatności wklejona inline w panelu AMO – aktualizować ręcznie przy zmianach
 
