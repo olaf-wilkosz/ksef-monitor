@@ -171,11 +171,11 @@ function determineAndShowView() {
 function showView(id) {
 	document.querySelectorAll('.view').forEach((v) => {
 		v.classList.remove('active');
-		v.setAttribute('aria-hidden', 'true');
+		v.inert = true;
 	});
 	const activeView = document.getElementById(id);
 	activeView?.classList.add('active');
-	activeView?.setAttribute('aria-hidden', 'false');
+	if (activeView) activeView.inert = false;
 
 	// Auto-focus – kursor od razu w odpowiednim polu
 	const focusMap = {
