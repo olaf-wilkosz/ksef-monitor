@@ -418,7 +418,12 @@ function showError(title, detail, hints, mode = 'retry') {
 	setPanel('testPanel', 'error', title, detail);
 	if (hints?.length) {
 		const list = document.getElementById('hintsList');
-		list.innerHTML = hints.map((h) => `<li>${h}</li>`).join('');
+		list.innerHTML = '';
+		hints.forEach((h) => {
+			const li = document.createElement('li');
+			li.textContent = h;
+			list.appendChild(li);
+		});
 		document.getElementById('hintsBox').style.display = 'block';
 	}
 	const retryBtn = document.getElementById('btnRetryTest');

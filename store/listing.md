@@ -1,4 +1,4 @@
-# KSeF Monitor – teksty do Chrome Web Store
+# KSeF Monitor – teksty do sklepów z rozszerzeniami
 
 ---
 
@@ -14,7 +14,7 @@ Monitor new invoices in Poland's KSeF system without logging into the portal. Ge
 
 ## DŁUGI OPIS – POLSKI
 
-KSeF Monitor to rozszerzenie Chrome, które sprawdza Krajowy System e-Faktur w tle i powiadamia Cię, gdy pojawi się nowa faktura zakupowa – bez konieczności logowania do portalu KSeF.
+KSeF Monitor to rozszerzenie przeglądarki, które sprawdza Krajowy System e-Faktur w tle i powiadamia Cię, gdy pojawi się nowa faktura zakupowa – bez konieczności logowania do portalu KSeF.
 
 **Jak to działa**
 
@@ -35,7 +35,7 @@ Token KSeF jest szyfrowany lokalnie algorytmem AES-256-GCM. Klucz pochodzi z Two
 
 **Wymagania**
 
-• Przeglądarka Chrome 88 lub nowsza
+• Przeglądarka Chrome 88+ lub Firefox 142+
 • Token KSeF z uprawnieniem „przeglądanie faktur" (do wygenerowania w portalu ksef.podatki.gov.pl)
 
 **Kontakt i zgłaszanie błędów**
@@ -47,7 +47,7 @@ Błędy: github.com/olaf-wilkosz/ksef-monitor/issues
 
 ## DŁUGI OPIS – ENGLISH
 
-KSeF Monitor is a Chrome extension that checks Poland's National e-Invoice System (KSeF) in the background and notifies you when a new purchase invoice arrives – no need to log into the portal manually.
+KSeF Monitor is a browser extension that checks Poland's National e-Invoice System (KSeF) in the background and notifies you when a new purchase invoice arrives – no need to log into the portal manually.
 
 **How it works**
 
@@ -68,7 +68,7 @@ Your KSeF token is encrypted locally using AES-256-GCM. The encryption key is de
 
 **Requirements**
 
-• Chrome 88 or newer
+• Chrome 88+ or Firefox 142+
 • A KSeF token with "invoice viewing" permission (generated at ksef.podatki.gov.pl)
 
 **Contact and bug reports**

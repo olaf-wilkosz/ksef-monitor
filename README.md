@@ -1,6 +1,6 @@
 # KSeF Monitor
 
-![Wersja](https://img.shields.io/github/manifest-json/v/olaf-wilkosz/ksef-monitor?filename=extension%2Fmanifest.json&branch=main&color=013f71&label=wersja) ![Licencja](https://img.shields.io/badge/licencja-MIT-green) ![Chrome](https://img.shields.io/badge/Chrome-88%2B-yellow) ![Firefox](https://img.shields.io/badge/Firefox-140%2B-orange)
+![Wersja](https://img.shields.io/github/manifest-json/v/olaf-wilkosz/ksef-monitor?filename=extension%2Fmanifest.json&branch=main&color=013f71&label=wersja) ![Licencja](https://img.shields.io/badge/licencja-MIT-green) ![Chrome](https://img.shields.io/badge/Chrome-88%2B-yellow) ![Firefox](https://img.shields.io/badge/Firefox-142%2B-orange)
 
 Rozszerzenie przeglądarki, które monitoruje nowe faktury zakupowe w Krajowym Systemie e-Faktur i powiadamia Cię gdy pojawi się coś nowego – bez logowania do portalu.
 
@@ -25,7 +25,7 @@ Rozszerzenie przeglądarki, które monitoruje nowe faktury zakupowe w Krajowym S
 
 ## Wymagania
 
-- Przeglądarka Chrome, Edge lub Brave (wersja 88+) albo Firefox (wersja 140+)
+- Przeglądarka Chrome, Edge lub Brave (wersja 88+) albo Firefox (wersja 142+)
 - Token KSeF z uprawnieniem **„przeglądanie faktur"** – wygenerujesz go w [portalu KSeF](https://ksef.podatki.gov.pl) w zakładce _Zarządzaj tokenami_
 
 ---

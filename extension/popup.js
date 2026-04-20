@@ -268,8 +268,16 @@ function renderNipSelector() {
 			const btn = document.createElement('button');
 			btn.className = 'nip-btn' + (account.nip === activeNip ? ' active' : '');
 			const name = account.companyName || `NIP ${account.nip}`;
-			const badge = account.pendingCount > 0 ? ` <span class="nip-badge">${account.pendingCount}</span>` : '';
-			btn.innerHTML = `<span class="nip-btn-label">${escHtml(name)}</span>${badge}`;
+			const labelSpan = document.createElement('span');
+			labelSpan.className = 'nip-btn-label';
+			labelSpan.textContent = name;
+			btn.appendChild(labelSpan);
+			if (account.pendingCount > 0) {
+				const badgeSpan = document.createElement('span');
+				badgeSpan.className = 'nip-badge';
+				badgeSpan.textContent = account.pendingCount;
+				btn.appendChild(badgeSpan);
+			}
 			btn.setAttribute('aria-label', `${name}, ${account.pendingCount} nowych`);
 			btn.setAttribute('title', account.nip);
 			btn.addEventListener('click', () => switchNip(account.nip));
@@ -400,17 +408,18 @@ function renderInvoiceList(pending, archive) {
 	const hasArchive = archive.length > 0;
 
 	if (!hasPending && !hasArchive) {
-		list.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-icon">
-          <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="18" cy="18" r="17" stroke="#c5cae9" stroke-width="1.5"/>
-            <path d="M11 18.5l5 5 9-9" stroke="#1565c0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="empty-state-text">Wszystko przejrzane</div>
-        <div class="empty-state-sub">Powiadomimy Cię o nowych fakturach</div>
-      </div>`;
+		const es = document.createElement('div');
+		es.className = 'empty-state';
+		es.innerHTML = `<div class="empty-state-icon"><svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="18" cy="18" r="17" stroke="#c5cae9" stroke-width="1.5"/><path d="M11 18.5l5 5 9-9" stroke="#1565c0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>`;
+		const txt = document.createElement('div');
+		txt.className = 'empty-state-text';
+		txt.textContent = 'Wszystko przejrzane';
+		const sub = document.createElement('div');
+		sub.className = 'empty-state-sub';
+		sub.textContent = 'Powiadomimy Cię o nowych fakturach';
+		es.appendChild(txt);
+		es.appendChild(sub);
+		list.appendChild(es);
 		return;
 	}
 
@@ -535,46 +544,81 @@ function buildInvoiceRow(inv, type) {
 		? `Otwórz Aplikację Podatnika KSeF\n(numer ${inv.ksefRef} zostanie skopiowany do schowka)`
 		: 'Otwórz Aplikację Podatnika KSeF';
 
-	// Akcje na poziomie meta (wiersz 2, prawa kolumna)
-	const actionsHtml =
-		type === 'pending'
-			? `<div class="inv-actions"><button class="inv-act inv-act-done" title="Oznacz jako przejrzaną">✓</button></div>`
-			: `<div class="inv-actions">
-			<button class="inv-act inv-act-star" title="Przywróć do nowych">★</button>
-			<button class="inv-act inv-act-hide" title="Ukryj z listy">✕</button>
-		   </div>`;
-
 	// Grid: seller + portal (wiersz 1), meta + akcje (wiersz 2)
-	item.innerHTML = `
-    <div class="inv-seller" title="${escHtml(inv.sellerName)}">${escHtml(trunc(inv.sellerName, 40))}</div>
-    <button class="inv-portal" title="${escHtml(portalTitle)}">↗</button>
-    <div class="inv-meta">
-      <span class="inv-meta-date">${date}</span>
-      <span class="inv-meta-number" title="${escHtml(inv.invoiceNumber)}">${escHtml(trunc(inv.invoiceNumber, 30))}</span>
-      <span class="inv-meta-amount">${amount}</span>
-    </div>
-    ${actionsHtml}`;
+	const seller = document.createElement('div');
+	seller.className = 'inv-seller';
+	seller.title = inv.sellerName ?? '';
+	seller.textContent = trunc(inv.sellerName, 40);
 
-	item.querySelector('.inv-portal').addEventListener('click', (e) => {
+	const portal = document.createElement('button');
+	portal.className = 'inv-portal';
+	portal.textContent = '↗';
+	portal.title = portalTitle;
+	portal.addEventListener('click', (e) => {
 		e.stopPropagation();
 		handleOpenInPortal(inv.ksefRef, activeAccount()?.environment ?? 'production');
 	});
 
+	const meta = document.createElement('div');
+	meta.className = 'inv-meta';
+
+	const metaDate = document.createElement('span');
+	metaDate.className = 'inv-meta-date';
+	metaDate.textContent = date;
+
+	const metaNum = document.createElement('span');
+	metaNum.className = 'inv-meta-number';
+	metaNum.title = inv.invoiceNumber ?? '';
+	metaNum.textContent = trunc(inv.invoiceNumber, 30);
+
+	const metaAmount = document.createElement('span');
+	metaAmount.className = 'inv-meta-amount';
+	metaAmount.textContent = amount;
+
+	meta.appendChild(metaDate);
+	meta.appendChild(metaNum);
+	meta.appendChild(metaAmount);
+
+	const actions = document.createElement('div');
+	actions.className = 'inv-actions';
+
 	if (type === 'pending') {
-		item.querySelector('.inv-act-done').addEventListener('click', (e) => {
+		const btnDone = document.createElement('button');
+		btnDone.className = 'inv-act inv-act-done';
+		btnDone.title = 'Oznacz jako przejrzaną';
+		btnDone.textContent = '✓';
+		btnDone.addEventListener('click', (e) => {
 			e.stopPropagation();
 			handleMarkNoticed(inv, item);
 		});
+		actions.appendChild(btnDone);
 	} else {
-		item.querySelector('.inv-act-star').addEventListener('click', (e) => {
+		const btnStar = document.createElement('button');
+		btnStar.className = 'inv-act inv-act-star';
+		btnStar.title = 'Przywróć do nowych';
+		btnStar.textContent = '★';
+		btnStar.addEventListener('click', (e) => {
 			e.stopPropagation();
 			handleRestoreToPending(inv, item);
 		});
-		item.querySelector('.inv-act-hide').addEventListener('click', (e) => {
+
+		const btnHide = document.createElement('button');
+		btnHide.className = 'inv-act inv-act-hide';
+		btnHide.title = 'Ukryj z listy';
+		btnHide.textContent = '✕';
+		btnHide.addEventListener('click', (e) => {
 			e.stopPropagation();
 			handleDismissArchive(inv, item);
 		});
+
+		actions.appendChild(btnStar);
+		actions.appendChild(btnHide);
 	}
+
+	item.appendChild(seller);
+	item.appendChild(portal);
+	item.appendChild(meta);
+	item.appendChild(actions);
 
 	return item;
 }
@@ -1376,10 +1420,30 @@ function renderLogsList(logs) {
 	logs.slice(0, 20).forEach((e) => {
 		const entry = document.createElement('div');
 		entry.className = 'log-entry error';
-		entry.innerHTML = `
-      <div class="log-time">${new Date(e.time).toLocaleString('pl-PL')}</div>
-      <div><span class="log-code">${escHtml(e.code ?? 'ERR')}</span>${e.nip ? ` <span style="color:#888">(${e.nip})</span>` : ''}</div>
-      <div class="log-msg">${escHtml(e.message ?? '')}</div>`;
+
+		const timeEl = document.createElement('div');
+		timeEl.className = 'log-time';
+		timeEl.textContent = new Date(e.time).toLocaleString('pl-PL');
+
+		const codeRow = document.createElement('div');
+		const codeEl = document.createElement('span');
+		codeEl.className = 'log-code';
+		codeEl.textContent = e.code ?? 'ERR';
+		codeRow.appendChild(codeEl);
+		if (e.nip) {
+			const nipEl = document.createElement('span');
+			nipEl.style.color = '#888';
+			nipEl.textContent = ` (${e.nip})`;
+			codeRow.appendChild(nipEl);
+		}
+
+		const msgEl = document.createElement('div');
+		msgEl.className = 'log-msg';
+		msgEl.textContent = e.message ?? '';
+
+		entry.appendChild(timeEl);
+		entry.appendChild(codeRow);
+		entry.appendChild(msgEl);
 		listEl.appendChild(entry);
 	});
 }
