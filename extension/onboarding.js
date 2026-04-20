@@ -1,9 +1,15 @@
 /**
- * onboarding.js – KSeF Monitor v0.8
+ * onboarding.js – KSeF Monitor
  * 3-krokowy onboarding: token+NIP → test+PIN → pobieranie
+ *
+ * Tryby:
+ *   ?mode=add  – dodawanie kolejnego NIP-a (weryfikacja istniejącego PIN-u)
+ *   (brak)     – pierwsze uruchomienie (ustawienie nowego PIN-u)
  */
 
 import { encryptToken } from './crypto-utils.js';
+
+const isAddMode = new URLSearchParams(window.location.search).get('mode') === 'add';
 
 const pendingConfig = {
 	nip: null,
@@ -25,7 +31,6 @@ function goToStep(step) {
 	document.getElementById('progress').style.width = (PROGRESS[step] || 0) + '%';
 	window.scrollTo({ top: 0, behavior: 'smooth' });
 
-	// Wracając do kroku 1 – zwiń collapsibles żeby Dalej był widoczny
 	if (step === 1) {
 		['bodyHowTo', 'bodyAdvanced'].forEach((id) => {
 			document.getElementById(id)?.classList.remove('open');
@@ -35,8 +40,7 @@ function goToStep(step) {
 		});
 	}
 
-	// Auto-focus
-	const focusMap = { 1: 'inputToken', 4: 'pinBox0' };
+	const focusMap = { 1: 'inputToken', 2: 'pinBox0' };
 	const targetId = focusMap[step];
 	if (targetId) requestAnimationFrame(() => document.getElementById(targetId)?.focus());
 }
@@ -44,21 +48,16 @@ function goToStep(step) {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
-	// Focus od razu na pole tokenu
+	// Tryb add: dostosuj nagłówki i etykiety PIN
+	if (isAddMode) {
+		applyAddModeUI();
+	}
+
 	requestAnimationFrame(() => document.getElementById('inputToken')?.focus());
 
 	// Collapsibles
 	bindCollapsible('btnHowTo', 'bodyHowTo', 'arrowHowTo');
 	bindCollapsible('btnAdvanced', 'bodyAdvanced', 'arrowAdvanced');
-
-	// Środowisko
-	['optProd', 'optDemo', 'optTest'].forEach((id) => {
-		document.getElementById(id).addEventListener('click', function () {
-			document.querySelectorAll('.radio-option').forEach((o) => o.classList.remove('selected'));
-			this.classList.add('selected');
-			pendingConfig.environment = this.querySelector('input').value;
-		});
-	});
 
 	// Token: ekstrakcja NIP live
 	document.getElementById('inputToken').addEventListener('input', function () {
@@ -67,15 +66,11 @@ document.addEventListener('DOMContentLoaded', () => {
 		const nipError = document.getElementById('nipError');
 		const token = this.value.trim();
 
-		// Pasek postępu – delikatny nudge gdy token wklejony
 		const progressEl = document.getElementById('progress');
 		if (progressEl) {
 			progressEl.style.width = token.length >= 20 ? '30%' : '20%';
 		}
 
-		// Walidacja formatu tokenu KSeF:
-		// Challenge (YYYYMMDD-XX-XXXXXXXXXX-XXXXXXXXXX-XX) + |nip-XXXXXXXXXX| + ciąg hex
-		// Format Challenge udokumentowany w OpenAPI CIRFMF; długość ciągu hex nie jest oficjalnie określona
 		const TOKEN_RE =
 			/^(\d{4})(\d{2})(\d{2})-[A-Z0-9]{2}-[A-F0-9]{10}-[A-F0-9]{10}-[A-Z0-9]{2}\|nip-(\d{10})\|[a-f0-9]+$/;
 		const match = token.match(TOKEN_RE);
@@ -103,16 +98,13 @@ document.addEventListener('DOMContentLoaded', () => {
 			nipInput.style.color = '#aaa';
 			nipInput.style.background = 'transparent';
 			nipInput.style.borderColor = 'transparent';
-			// Chowamy wrapper całkowicie – nie pokazujemy pola nazwy przy złym tokenie
 			const wrap = document.getElementById('companyBadgeWrap');
 			if (wrap) wrap.style.visibility = 'hidden';
 			document.getElementById('companyBadge').value = '';
 			if (token.length >= 20) {
-				if (/\|nip-\d{10}\|/.test(token)) {
-					nipError.textContent = 'Nieprawidłowy format tokenu – sprawdź czy skopiowałeś go w całości';
-				} else {
-					nipError.textContent = 'Token nie zawiera NIPu – sprawdź czy token pochodzi z portalu KSeF';
-				}
+				nipError.textContent = /\|nip-\d{10}\|/.test(token)
+					? 'Nieprawidłowy format tokenu – sprawdź czy skopiowałeś go w całości'
+					: 'Token nie zawiera NIPu – sprawdź czy token pochodzi z portalu KSeF';
 				if (btn1) btn1.disabled = true;
 			} else {
 				nipError.textContent = '';
@@ -121,20 +113,15 @@ document.addEventListener('DOMContentLoaded', () => {
 		}
 	});
 
-	// Nazwa firmy: edycja przez użytkownika nadpisuje wynik z białej listy
-	// inputNip jest readonly – blur listener niepotrzebny
-
-	// Ołówek odblokowuje edycję nazwy
+	// Edycja nazwy firmy
 	document.getElementById('companyEditHint').addEventListener('click', function () {
 		const el = document.getElementById('companyBadge');
 		if (!el.readOnly) {
-			// ✓ kliknięty – zatwierdź
 			pendingConfig.companyName = el.value.trim() || null;
 			el.readOnly = true;
 			el.style.cursor = 'default';
 			this.textContent = '✏️';
 		} else {
-			// ✏️ kliknięty – odblokuj
 			el.readOnly = false;
 			el.style.cursor = 'text';
 			el.focus();
@@ -148,7 +135,6 @@ document.addEventListener('DOMContentLoaded', () => {
 			this.click();
 		}
 	});
-
 	document.getElementById('companyBadge').addEventListener('keydown', function (e) {
 		if (e.key === 'Enter') {
 			e.preventDefault();
@@ -159,15 +145,12 @@ document.addEventListener('DOMContentLoaded', () => {
 			if (hint) hint.textContent = '✏️';
 		}
 	});
-
 	document.getElementById('companyBadge').addEventListener('input', function () {
 		if (!this.readOnly) pendingConfig.companyName = this.value.trim() || null;
 	});
 
-	// Krok 1 → 2
+	// Nawigacja
 	document.getElementById('btn1Next').addEventListener('click', validateStep1);
-
-	// Krok 2: wstecz, retry, potwierdź PIN
 	document.getElementById('btn2Back').addEventListener('click', () => goToStep(1));
 	document.getElementById('btnRetryTest').addEventListener('click', () => {
 		try {
@@ -178,10 +161,10 @@ document.addEventListener('DOMContentLoaded', () => {
 	});
 	document.getElementById('btnConfirmPin').addEventListener('click', confirmPin);
 
-	// OTP boxes – auto-advance, backspace, cyfry only
+	// OTP boxes
 	initOtpBoxes();
 
-	// Toggle powiadomień – aktualizacja wyglądu slidera
+	// Toggle powiadomień
 	document.addEventListener('change', (e) => {
 		if (e.target.id === 'toggleNotificationsOnboarding') {
 			const on = e.target.checked;
@@ -201,7 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		toggle.setAttribute('aria-label', isHidden ? 'Ukryj PIN' : 'Pokaż PIN');
 	});
 
-	// Krok 3 → final
+	// Zamknij / dodaj kolejny NIP
 	document.getElementById('btnClose').addEventListener('click', async () => {
 		const notifEnabled = document.getElementById('toggleNotificationsOnboarding')?.checked ?? false;
 		if (notifEnabled) {
@@ -212,23 +195,38 @@ document.addEventListener('DOMContentLoaded', () => {
 		}
 		window.close();
 	});
+
+	document.getElementById('btnAddAnother')?.addEventListener('click', () => {
+		chrome.runtime.sendMessage({ type: 'OPEN_ONBOARDING', mode: 'add' });
+		window.close();
+	});
 });
+
+// ── Tryb add: dostosowanie UI ─────────────────────────────────────────────────
+
+function applyAddModeUI() {
+	// Nagłówek kroku 1
+	const title1 = document.getElementById('step1title');
+	if (title1) title1.textContent = 'Dodaj kolejny NIP';
+	const sub1 = document.getElementById('step1subtitle');
+	if (sub1) sub1.textContent = 'Wklej token KSeF dla nowej działalności';
+
+	// Etykieta PIN – zamiast "Ustaw PIN" pokazujemy "Potwierdź PIN"
+	// (etykieta aktualizowana dynamicznie w onTokenTestSuccess)
+}
 
 // ── Collapsible ───────────────────────────────────────────────────────────────
 
 function bindCollapsible(triggerId, bodyId, arrowId) {
 	const trigger = document.getElementById(triggerId);
-	document.getElementById(triggerId).addEventListener('click', () => {
+	trigger.addEventListener('click', () => {
 		const body = document.getElementById(bodyId);
 		const arrow = document.getElementById(arrowId);
 		const open = body.classList.toggle('open');
 		arrow.classList.toggle('open', open);
 		trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
-		if (open) {
-			body.removeAttribute('inert');
-		} else {
-			body.setAttribute('inert', '');
-		}
+		if (open) body.removeAttribute('inert');
+		else body.setAttribute('inert', '');
 	});
 }
 
@@ -250,7 +248,6 @@ async function lookupCompanyName(nip) {
 		pendingConfig.companyName = name;
 		setCompanyBadge(name);
 	} catch {
-		// Biała Lista niedostępna – nie blokujemy, cicho ignorujemy
 		setCompanyBadge(null);
 	}
 }
@@ -287,11 +284,11 @@ function validateStep1() {
 	document.getElementById('tokenError').textContent = '';
 	const TOKEN_RE = /^\d{8}-[A-Z0-9]{2}-[A-F0-9]{10}-[A-F0-9]{10}-[A-Z0-9]{2}\|nip-\d{10}\|[a-f0-9]+$/;
 	const NIP_PRESENT_RE = /\|nip-\d{10}\|/;
+
 	if (!token) {
 		document.getElementById('tokenError').textContent = 'Wklej token KSeF z portalu podatki.gov.pl';
 		valid = false;
 	} else if (!TOKEN_RE.test(token)) {
-		// Rozróżniamy: token zawiera NIP ale jest urwany/zniekształcony vs. brak NIPu w ogóle
 		document.getElementById('tokenError').textContent = NIP_PRESENT_RE.test(token)
 			? 'Token jest niekompletny – skopiuj go w całości z portalu KSeF'
 			: 'Token nie zawiera NIPu – wklej token wygenerowany w portalu KSeF';
@@ -321,7 +318,6 @@ function resetTestUI() {
 	document.getElementById('hintsList').innerHTML = '';
 	document.getElementById('btnRetryTest').style.display = 'none';
 	document.getElementById('btnConfirmPin').style.display = 'none';
-	// Ukryj PIN sekcję
 	document.getElementById('pinSection').classList.remove('visible');
 }
 
@@ -333,7 +329,6 @@ async function runTokenTest() {
 	};
 	const baseUrl = envUrls[pendingConfig.environment] || envUrls.production;
 
-	// ── Krok 1: sieć / klucz publiczny ──────────────────────────────────────
 	setPanel('testPanel', 'loading', 'Pobieranie klucza publicznego MF...', '');
 	try {
 		const probe = await fetch(baseUrl + '/security/public-key-certificates', {
@@ -348,7 +343,7 @@ async function runTokenTest() {
 			]);
 			return;
 		}
-	} catch (err) {
+	} catch {
 		setIcon('iconKey', '❌');
 		showError('Brak połączenia z KSeF', 'Sprawdź połączenie internetowe lub status serwisów MF.', [
 			'Sprawdź połączenie internetowe',
@@ -358,7 +353,6 @@ async function runTokenTest() {
 	}
 	setIcon('iconKey', '✅');
 
-	// ── Krok 2: autoryzacja tokenem ──────────────────────────────────────────
 	setPanel('testPanel', 'loading', 'Weryfikuję token...', 'Autoryzacja RSA-OAEP → JWT');
 	try {
 		const response = await chrome.runtime.sendMessage({
@@ -373,7 +367,6 @@ async function runTokenTest() {
 			onTokenTestSuccess();
 		} else {
 			setIcon('iconAuth', '❌');
-			const msg = response?.error || 'Błąd autoryzacji';
 			const is450 = response?.code === 'AUTH_FAILED_450';
 			if (is450) {
 				showError(
@@ -385,11 +378,10 @@ async function runTokenTest() {
 			} else {
 				showError(
 					'Autoryzacja nieudana',
-					msg,
+					response?.error || 'Błąd autoryzacji',
 					[
-						"Upewnij się, że token ma uprawnienie 'przeglądanie faktur'",
+						'Upewnij się, że token ma uprawnienie "przeglądanie faktur"',
 						'Sprawdź czy NIP odpowiada właścicielowi tokenu',
-						'Token produkcyjny działa od 1.02.2026 (duże podmioty) lub 1.04.2026 (pozostałe)',
 						'Sprawdź czy wybrane środowisko zgadza się z tokenem',
 					],
 					'back'
@@ -407,23 +399,22 @@ async function runTokenTest() {
 function onTokenTestSuccess() {
 	setPanel('testPanel', 'success', '✅ Token zweryfikowany!', 'Możesz teraz ustawić PIN.');
 
-	// Aktualizuj nagłówek kroku
-	document.getElementById('step2title').textContent = '🔒 Ustaw PIN';
-	document.getElementById('step2subtitle').textContent = 'Token OK – zabezpiecz go PIN-em';
+	// W trybie add – "Potwierdź PIN", w normalnym – "Ustaw PIN"
+	document.getElementById('step2title').textContent = isAddMode ? '🔒 Potwierdź PIN' : '🔒 Ustaw PIN';
+	document.getElementById('step2subtitle').textContent = isAddMode
+		? 'Wprowadź istniejący PIN aby zaszyfrować nowy token'
+		: 'Token OK – zabezpiecz go PIN-em';
 	document.getElementById('step2indicator').textContent = 'Krok 2 z 3';
+	const pinSectionTitle = document.getElementById('pinSectionTitle');
+	if (pinSectionTitle) pinSectionTitle.textContent = isAddMode ? '🔒 Potwierdź PIN' : '🔒 Ustaw PIN';
 
-	// Pokaż sekcję PIN
 	const pinSection = document.getElementById('pinSection');
 	pinSection.classList.add('visible');
-	// Focus na pierwszy PIN po animacji
 	setTimeout(() => document.getElementById('pinBox0').focus(), 350);
-
 	document.getElementById('btnConfirmPin').style.display = 'inline-flex';
 }
 
 function showError(title, detail, hints, mode = 'retry') {
-	// mode: "retry" = błąd sieci/serwera → Spróbuj ponownie + Wstecz widoczny
-	//       "back"  = zły token/450/auth  → tylko Zmień token (Wstecz zbędny)
 	setPanel('testPanel', 'error', title, detail);
 	if (hints?.length) {
 		const list = document.getElementById('hintsList');
@@ -435,11 +426,11 @@ function showError(title, detail, hints, mode = 'retry') {
 	if (mode === 'back') {
 		retryBtn.textContent = '← Zmień token';
 		retryBtn.onclick = () => goToStep(1);
-		if (backBtn) backBtn.style.display = 'none'; // duplikat – chowamy
+		if (backBtn) backBtn.style.display = 'none';
 	} else {
 		retryBtn.textContent = '🔄 Spróbuj ponownie';
 		retryBtn.onclick = null;
-		if (backBtn) backBtn.style.display = ''; // przywróć
+		if (backBtn) backBtn.style.display = '';
 	}
 	retryBtn.style.display = 'inline-flex';
 }
@@ -478,13 +469,12 @@ function initOtpBoxes() {
 			if (box.value) {
 				box.classList.add('filled');
 				if (i < 3) boxes[i + 1].focus();
-				else confirmPin(); // auto-submit po 4. cyfrze
+				else confirmPin();
 			} else {
 				box.classList.remove('filled');
 			}
 		});
 		box.addEventListener('focus', () => box.select());
-		// Wklej cały PIN naraz
 		box.addEventListener('paste', (e) => {
 			e.preventDefault();
 			const digits = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 4);
@@ -517,6 +507,20 @@ async function confirmPin() {
 		return;
 	}
 
+	// W trybie add: weryfikuj istniejący PIN przed szyfrowaniem
+	if (isAddMode) {
+		const verify = await chrome.runtime.sendMessage({ type: 'VERIFY_PIN', pin });
+		if (!verify.ok) {
+			errEl.textContent = 'Nieprawidłowy PIN – to musi być PIN który ustawiłeś przy pierwszym NIP-ie';
+			otpBoxes().forEach((b) => {
+				b.value = '';
+				b.classList.remove('filled');
+			});
+			otpBoxes()[0].focus();
+			return;
+		}
+	}
+
 	pendingConfig.pin = pin;
 
 	const btn = document.getElementById('btnConfirmPin');
@@ -525,18 +529,21 @@ async function confirmPin() {
 
 	try {
 		const encrypted = await encryptToken(pendingConfig.ksefToken, pendingConfig.pin);
-		await chrome.storage.local.set({
-			encryptedToken: encrypted,
-			config: {
-				nip: pendingConfig.nip,
-				companyName: pendingConfig.companyName ?? null,
-				environment: pendingConfig.environment,
-				pollIntervalMinutes: pendingConfig.pollIntervalMinutes,
-				pendingDaysThreshold: 'month',
-				notificationsEnabled: false,
-			},
-		});
 		pendingConfig.ksefToken = ''; // wymaż plain text z pamięci
+
+		// Wyślij ADD_ACCOUNT do background – dodaje konto i ustawia alarm
+		const addResponse = await chrome.runtime.sendMessage({
+			type: 'ADD_ACCOUNT',
+			nip: pendingConfig.nip,
+			encryptedToken: encrypted,
+			companyName: pendingConfig.companyName ?? null,
+			environment: pendingConfig.environment,
+		});
+
+		if (!addResponse?.ok) {
+			errEl.textContent = addResponse?.error ?? 'Nie udało się dodać konta.';
+			return;
+		}
 
 		goToStep(3);
 		await runFetchInvoices();
@@ -556,6 +563,7 @@ async function runFetchInvoices() {
 	try {
 		const response = await chrome.runtime.sendMessage({
 			type: 'SETUP_TOKEN',
+			nip: pendingConfig.nip,
 			pin: pendingConfig.pin,
 		});
 		pendingConfig.pin = '';
@@ -573,7 +581,6 @@ async function runFetchInvoices() {
 				minutes: pendingConfig.pollIntervalMinutes,
 			});
 		} else {
-			// Błąd pobierania NIE blokuje – rozszerzenie jest już skonfigurowane
 			setPanel(
 				'fetchPanel',
 				'error',
@@ -582,7 +589,7 @@ async function runFetchInvoices() {
 					'\n\nRozszerzenie zostało skonfigurowane. Użyj Odśwież archiwum w ustawieniach kiedy będziesz gotowy.'
 			);
 		}
-	} catch (err) {
+	} catch {
 		setPanel(
 			'fetchPanel',
 			'error',
@@ -591,7 +598,6 @@ async function runFetchInvoices() {
 		);
 	}
 
-	// Pokaż podsumowanie końcowe i przycisk Zamknij
 	const summary = document.getElementById('finalSummary');
 	if (summary) summary.style.display = 'block';
 	document.getElementById('step3title').textContent = '🎉 KSeF Monitor aktywny!';
@@ -600,6 +606,10 @@ async function runFetchInvoices() {
 	document.getElementById('finalInterval2').textContent = pendingConfig.pollIntervalMinutes;
 	document.getElementById('btnClose').style.display = 'inline-flex';
 	document.getElementById('toolbarHint').style.display = 'block';
+
+	// Pokaż przycisk "Dodaj kolejny NIP"
+	const btnAddAnother = document.getElementById('btnAddAnother');
+	if (btnAddAnother) btnAddAnother.style.display = 'inline-flex';
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

@@ -1,34 +1,64 @@
 /**
  * popup.js – logika interfejsu popup
  *
- * Stan faktur:
- *   pendingInvoices  – nowe, nieprzejrzane (czarne, bold, z checkboxem)
- *   recentArchive    – ostatnio przejrzane (szare, TTL 90 dni)
+ * Stan faktur (v1.1 multi-NIP):
+ *   accounts    – lista kont z pollState i invoiceState per NIP
+ *   activeNip   – aktywny NIP (wybrany przez użytkownika)
+ *   config      – globalna konfiguracja (interwał, powiadomienia, threshold)
  *
- * Renderowanie: pierwsze 10 pending/archive, przyciski "Pokaż kolejne"
- * Licznik + badge = pendingInvoices.length
+ * Renderowanie: NipSelector u góry viewMain, lista faktur dla activeNip
+ * Badge = zagregowana liczba pending ze wszystkich NIP-ów
  */
 
 // ─── Stan ─────────────────────────────────────────────────────────────────────
 
 let config = {};
-let pollState = {};
-let invoiceState = { allSeenIds: [], pendingInvoices: [], recentArchive: [], lastQueryTime: null };
+let accounts = []; // [{ nip, companyName, environment, pendingCount, pollState }]
+let activeNip = null;
 
-// Toast – timer i aktywne cofnięcie
+// Skróty do danych aktywnego konta
+const activeAccount = () => accounts.find((a) => a.nip === activeNip) ?? null;
+const activeInvoices = () => activeAccount()?.invoiceState ?? { pendingInvoices: [], recentArchive: [] };
+const activePollState = () => activeAccount()?.pollState ?? {};
+
+// Toast
 let toastTimer = null;
 let toastInvoiceId = null;
-let toastInvoiceType = null; // "pending" | "archive" | "bulk"
-let toastBulkSnapshot = null; // snapshot pending[] dla undo "oznacz wszystkie"
+let toastInvoiceType = null;
+let toastBulkSnapshot = null;
 
 // Reaguj na zmiany storage gdy popup jest otwarty
-// (np. sesja wygasa podczas gdy popup jest widoczny)
-chrome.storage.onChanged.addListener((changes, area) => {
+chrome.storage.onChanged.addListener(async (changes, area) => {
 	if (area !== 'local') return;
-	if (changes.pollState?.newValue?.needsNewToken) {
+	if (!changes.accounts) return;
+
+	// Reaguj tylko gdy zmienia się lista NIP-ów (dodanie/usunięcie konta),
+	// nie przy każdej aktualizacji pollState/invoiceState
+	const prevNips = new Set(Object.keys(changes.accounts.oldValue ?? {}));
+	const currNips = new Set(Object.keys(changes.accounts.newValue ?? {}));
+	const nipListChanged = prevNips.size !== currNips.size || [...currNips].some((n) => !prevNips.has(n));
+
+	if (!nipListChanged) return;
+
+	const wasEmpty = prevNips.size === 0;
+	await loadState();
+	const ps = activePollState();
+	if (ps.needsNewToken) {
 		showView('viewNewToken');
-	} else if (changes.pollState?.newValue?.needsPin) {
+		return;
+	}
+	if (ps.needsPin) {
 		showView('viewPin');
+		return;
+	}
+
+	renderMainView();
+	// Pierwsze konto – idź do głównego widoku (użytkownik skończył onboarding)
+	// Kolejne zmiany (dodanie/usunięcie) – zostań w ustawieniach
+	if (wasEmpty) {
+		showView('viewMain');
+	} else {
+		showSettingsView();
 	}
 });
 
@@ -40,94 +70,112 @@ document.addEventListener('DOMContentLoaded', async () => {
 	bindEvents();
 });
 
+// Odśwież stan gdy popup odzyska focus (np. po zamknięciu okna onboardingu)
+window.addEventListener('focus', async () => {
+	const prevNips = accounts.map((a) => a.nip).join(',');
+	const wasEmpty = accounts.length === 0;
+	await loadState();
+	const currNips = accounts.map((a) => a.nip).join(',');
+	if (currNips !== prevNips) {
+		renderMainView();
+		if (wasEmpty) {
+			showView('viewMain');
+		} else {
+			showSettingsView();
+		}
+	}
+});
+
 async function loadState() {
-	const result = await chrome.storage.local.get([
-		'config',
-		'authState',
-		'pollState',
-		'invoiceState',
-		'encryptedToken',
-	]);
-	config = result.config ?? {
-		environment: 'production',
+	// Globalna konfiguracja
+	const cfgResult = await chrome.storage.local.get('config');
+	config = cfgResult.config ?? {
 		pollIntervalMinutes: 60,
 		notificationsEnabled: false,
-		companyName: null,
+		pendingDaysThreshold: 'month',
 	};
-	pollState = result.pollState ?? {};
-	invoiceState = migrateInvoiceState(result.invoiceState);
 
+	// Pobierz podsumowanie wszystkich kont z background
+	const response = await chrome.runtime.sendMessage({ type: 'GET_ACCOUNTS_SUMMARY' }).catch(() => null);
+	if (response?.ok) {
+		accounts = response.accounts ?? [];
+		activeNip = response.activeNip ?? accounts[0]?.nip ?? null;
+	} else {
+		// Fallback: SW nie żyje jeszcze (zimny start) – czytaj bezpośrednio z storage
+		const raw = await chrome.storage.local.get(['accounts', 'activeNip']);
+		const storedAccounts = raw.accounts ?? {};
+		accounts = Object.entries(storedAccounts).map(([nip, account]) => ({
+			nip,
+			companyName: account.companyName,
+			environment: account.environment,
+			pendingCount: account.invoiceState?.pendingInvoices?.length ?? 0,
+			pollState: account.pollState ?? {},
+			authState: account.authState ?? {},
+			invoiceState: account.invoiceState ?? {
+				allSeenIds: [],
+				pendingInvoices: [],
+				recentArchive: [],
+				lastQueryTime: null,
+			},
+		}));
+		activeNip = raw.activeNip ?? accounts[0]?.nip ?? null;
+	}
+
+	// envLabel w headerze: środowisko aktywnego konta
+	const env = activeAccount()?.environment ?? 'production';
 	const labels = { production: 'PRD', demo: 'DEMO', test: 'TEST' };
-	document.getElementById('envLabel').textContent = labels[config.environment] ?? 'PRD';
-}
-
-/** Migracja starszego schematu – bezpieczna fallback. */
-function migrateInvoiceState(raw) {
-	if (!raw) return { allSeenIds: [], pendingInvoices: [], recentArchive: [], lastQueryTime: null };
-	if (raw.allSeenIds !== undefined) return raw; // v0.3 – OK
-	// v0.2.0 / v0.1.x
-	return {
-		allSeenIds: raw.lastSeenIds ?? [],
-		pendingInvoices: raw.pendingInvoices ?? [],
-		recentArchive: [],
-		lastQueryTime: raw.lastQueryTime ?? null,
-	};
+	document.getElementById('envLabel').textContent = labels[env] ?? 'PRD';
 }
 
 // ─── Routing ──────────────────────────────────────────────────────────────────
 
 // UI-lock (nie crypto-lock): po 4h bezczynności popup wymaga PIN zanim pokaże dane.
-// Background nadal polluje przez refresh token – PIN nie jest weryfikowany kryptograficznie.
-// Pełna weryfikacja kryptograficzna następuje dopiero gdy background ustawi needsPin=true
-// (wygaśnięcie refresh tokena ~7 dni). To jest świadoma decyzja projektowa.
+// Background nadal polluje przez refresh token – weryfikacja kryptograficzna przez VERIFY_PIN.
 const PIN_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 
 function determineAndShowView() {
-	chrome.storage.local.get(['encryptedToken', 'authState', 'pollState'], (result) => {
-		const hasToken = !!result.encryptedToken;
-		const auth = result.authState ?? {};
-		const ps = result.pollState ?? {};
+	if (accounts.length === 0) {
+		showView('viewSetup');
+		return;
+	}
 
-		if (!hasToken) {
-			showView('viewSetup');
-			return;
-		}
-		if (ps.needsNewToken) {
-			showView('viewNewToken');
-			return;
-		}
-		if (ps.needsPin) {
-			showView('viewPin');
-			return;
-		}
+	const ps = activePollState();
 
-		// Nieaktywność > 4h (np. po uśpieniu) → wymagaj PIN zanim pokażemy dane
-		const lastSuccess = ps.lastSuccessTime ? new Date(ps.lastSuccessTime).getTime() : 0;
-		if (lastSuccess && Date.now() - lastSuccess > PIN_TIMEOUT_MS) {
-			showView('viewPin');
-			return;
-		}
+	if (ps.needsNewToken) {
+		showView('viewNewToken');
+		return;
+	}
+	if (ps.needsPin) {
+		showView('viewPin');
+		return;
+	}
 
-		// accessToken jest w session storage (od v1.0.2) – sprawdzamy tylko refreshToken w local
-		const validRefresh = auth.refreshToken && auth.refreshTokenExpiry > Date.now() + 30_000;
-		if (!validRefresh && !lastSuccess) {
-			showView('viewPin');
-			return;
-		}
+	// Nieaktywność > 4h → wymagaj PIN zanim pokażemy dane
+	const lastSuccess = ps.lastSuccessTime ? new Date(ps.lastSuccessTime).getTime() : 0;
+	if (lastSuccess && Date.now() - lastSuccess > PIN_TIMEOUT_MS) {
+		showView('viewPin');
+		return;
+	}
 
-		renderMainView();
-		showView('viewMain');
-	});
+	// accessToken jest w session storage – sprawdzamy tylko refreshToken
+	const authState = activeAccount()?.authState ?? {};
+	const validRefresh = authState.refreshToken && authState.refreshTokenExpiry > Date.now() + 30_000;
+	if (!validRefresh && !lastSuccess) {
+		showView('viewPin');
+		return;
+	}
+
+	renderMainView();
 }
 
 function showView(id) {
 	document.querySelectorAll('.view').forEach((v) => {
 		v.classList.remove('active');
-		v.setAttribute('aria-hidden', 'true');
+		v.inert = true;
 	});
 	const activeView = document.getElementById(id);
 	activeView?.classList.add('active');
-	activeView?.setAttribute('aria-hidden', 'false');
+	if (activeView) activeView.inert = false;
 
 	// Auto-focus – kursor od razu w odpowiednim polu
 	const focusMap = {
@@ -145,15 +193,25 @@ function showView(id) {
 // ─── Widok główny ─────────────────────────────────────────────────────────────
 
 function renderMainView() {
-	const pending = invoiceState.pendingInvoices ?? [];
-	const archive = invoiceState.recentArchive ?? [];
+	// Upewnij się że viewMain jest widoczny zanim zmierzymy layout (getBoundingClientRect)
+	showView('viewMain');
+	const account = activeAccount();
+	const inv = activeInvoices();
+	const ps = activePollState();
+	const pending = inv.pendingInvoices ?? [];
+	const archive = inv.recentArchive ?? [];
 	const count = pending.length;
 
+	// NipSelector
+	renderNipSelector();
+
+	// Licznik
 	const countEl = document.getElementById('invoiceCount');
 	countEl.textContent = count;
 	countEl.className = 'counter-num' + (count === 0 ? ' zero' : '');
 
-	const qt = pollState.lastSuccessTime;
+	// Czas ostatniego sprawdzenia
+	const qt = ps.lastSuccessTime;
 	document.getElementById('lastCheck').textContent = qt
 		? 'Sprawdzono ' +
 			new Date(qt).toLocaleString('pl-PL', {
@@ -164,25 +222,105 @@ function renderMainView() {
 			})
 		: 'Nigdy nie sprawdzono';
 
+	// envLabel – środowisko aktywnego konta
+	const labels = { production: 'PRD', demo: 'DEMO', test: 'TEST' };
+	document.getElementById('envLabel').textContent = labels[account?.environment ?? 'production'] ?? 'PRD';
+
 	renderStatusBadge();
+
+	// Ustaw wysokość listy używając znanych stałych (z logów):
+	// header=42, footer=30, btnRow=53, mainWrap fixed parts (status+counter+padding+margins)=90
+	// Cel: popup = 596px (Chrome limit 600px - 4px zapasu)
+	{
+		const HEADER = 42,
+			FOOTER = 30,
+			BTN_ROW = 53,
+			WRAP_FIXED = 90,
+			MAX_H = 600;
+		const nipSel = document.getElementById('nipSelector');
+		const nipH = nipSel && nipSel.style.display !== 'none' ? nipSel.getBoundingClientRect().height + 8 : 0;
+		const list = document.getElementById('invoiceList');
+		if (list) list.style.height = Math.max(150, MAX_H - HEADER - WRAP_FIXED - nipH - BTN_ROW - FOOTER) + 'px';
+	}
+
 	renderInvoiceList(pending, archive);
 }
 
+// ─── NipSelector ─────────────────────────────────────────────────────────────
+
+function renderNipSelector() {
+	const container = document.getElementById('nipSelector');
+	if (!container) return;
+
+	// Ukryj selector jeśli tylko jeden NIP
+	if (accounts.length <= 1) {
+		container.style.display = 'none';
+		return;
+	}
+
+	container.style.display = 'flex';
+	container.style.flexDirection = 'column';
+	container.innerHTML = '';
+
+	if (accounts.length <= 3) {
+		// Do 3 NIP-ów → przyciski w kolumnie
+		accounts.forEach((account) => {
+			const btn = document.createElement('button');
+			btn.className = 'nip-btn' + (account.nip === activeNip ? ' active' : '');
+			const name = account.companyName || `NIP ${account.nip}`;
+			const badge = account.pendingCount > 0 ? ` <span class="nip-badge">${account.pendingCount}</span>` : '';
+			btn.innerHTML = `<span class="nip-btn-label">${escHtml(name)}</span>${badge}`;
+			btn.setAttribute('aria-label', `${name}, ${account.pendingCount} nowych`);
+			btn.setAttribute('title', account.nip);
+			btn.addEventListener('click', () => switchNip(account.nip));
+			container.appendChild(btn);
+		});
+	} else {
+		// 3+ NIP-ów → dropdown
+		const select = document.createElement('select');
+		select.className = 'nip-select';
+		select.setAttribute('aria-label', 'Wybierz NIP');
+		accounts.forEach((account) => {
+			const opt = document.createElement('option');
+			opt.value = account.nip;
+			const label = account.companyName
+				? `${trunc(account.companyName, 20)} (${account.nip})`
+				: `NIP ${account.nip}`;
+			opt.textContent = account.pendingCount > 0 ? `${label} · ${account.pendingCount} nowych` : label;
+			if (account.nip === activeNip) opt.selected = true;
+			select.appendChild(opt);
+		});
+		select.addEventListener('change', () => switchNip(select.value));
+		container.appendChild(select);
+	}
+}
+
+async function switchNip(nip) {
+	activeNip = nip;
+	await chrome.runtime.sendMessage({ type: 'SET_ACTIVE_NIP', nip });
+	renderedPendingCount = RENDER_PAGE;
+	renderedArchiveCount = RENDER_PAGE;
+	renderMainView();
+}
+
+// ─── Status badge ─────────────────────────────────────────────────────────────
+
 function renderStatusBadge() {
 	const el = document.getElementById('pollStatus');
+	const ps = activePollState();
 	el.classList.remove('clickable', 's-ok', 's-warn', 's-err', 's-pin');
 
-	if (pollState.needsPin) {
+	if (ps.needsPin) {
 		el.textContent = 'Wymagany PIN →';
 		el.classList.add('s-pin', 'clickable');
 		el.onclick = () => showView('viewPin');
-	} else if (pollState.backoffUntil && new Date(pollState.backoffUntil) > new Date()) {
-		const min = Math.ceil((new Date(pollState.backoffUntil) - Date.now()) / 60000);
+	} else if (ps.backoffUntil && new Date(ps.backoffUntil) > new Date()) {
+		const min = Math.ceil((new Date(ps.backoffUntil) - Date.now()) / 60000);
 		el.textContent = `Backoff (${min} min)`;
 		el.classList.add('s-warn');
 		el.onclick = null;
-	} else if ((pollState.consecutiveErrors ?? 0) > 0) {
-		el.textContent = `Błąd (${pollState.consecutiveErrors}×)`;
+	} else if ((ps.consecutiveErrors ?? 0) > 0) {
+		el.textContent = `Błąd (${ps.consecutiveErrors}×)`;
 		el.classList.add('s-err');
 		el.onclick = null;
 	} else {
@@ -300,7 +438,8 @@ function renderInvoiceList(pending, archive) {
 			btnMore.textContent = `Pokaż kolejne ${Math.min(RENDER_PAGE, remaining)} nowe (${remaining} oczekujących)`;
 			btnMore.addEventListener('click', () => {
 				renderedPendingCount += RENDER_PAGE;
-				renderInvoiceList(invoiceState.pendingInvoices ?? [], invoiceState.recentArchive ?? []);
+				const inv = activeInvoices();
+				renderInvoiceList(inv.pendingInvoices ?? [], inv.recentArchive ?? []);
 			});
 			actionsRow.appendChild(btnMore);
 		}
@@ -309,11 +448,16 @@ function renderInvoiceList(pending, archive) {
 		btnAll.className = 'btn-section-action btn-section-action--all';
 		btnAll.textContent = `Oznacz wszystkie ${sorted.length} nowe jako przejrzane`;
 		btnAll.addEventListener('click', async () => {
-			const snapshot = [...(invoiceState.pendingInvoices ?? [])];
+			const snapshot = [...(activeInvoices().pendingInvoices ?? [])];
 			if (snapshot.length === 0) return;
-			await chrome.runtime.sendMessage({ type: 'MARK_ALL_NOTICED' });
-			invoiceState.recentArchive = [...snapshot, ...(invoiceState.recentArchive ?? [])];
-			invoiceState.pendingInvoices = [];
+			await chrome.runtime.sendMessage({ type: 'MARK_ALL_NOTICED', nip: activeNip });
+			// Aktualizuj lokalny stan konta
+			const acc = activeAccount();
+			if (acc) {
+				acc.invoiceState.recentArchive = [...snapshot, ...(acc.invoiceState.recentArchive ?? [])];
+				acc.invoiceState.pendingInvoices = [];
+				acc.pendingCount = 0;
+			}
 			renderedPendingCount = RENDER_PAGE;
 			renderMainView();
 			showBulkToast(snapshot);
@@ -322,9 +466,10 @@ function renderInvoiceList(pending, archive) {
 		inner.appendChild(actionsRow);
 
 		body.appendChild(inner);
+		const pendingLabel = makeSectionLabel(`Nowe (${pending.length})`, 'pending', body, 'sectionBodyPending');
+		list.appendChild(pendingLabel);
+		list.appendChild(body);
 		if (hasArchive) {
-			const pendingLabel = makeSectionLabel(`Nowe (${pending.length})`, 'pending', body, 'sectionBodyPending');
-			list.appendChild(pendingLabel);
 			// Ustaw top dla "Wcześniejsze" po wyrenderowaniu Nowe – sticky stacking
 			requestAnimationFrame(() => {
 				const h = pendingLabel.getBoundingClientRect().height;
@@ -332,7 +477,6 @@ function renderInvoiceList(pending, archive) {
 				if (archiveLabel) archiveLabel.style.top = `${h}px`;
 			});
 		}
-		list.appendChild(body);
 	}
 
 	if (hasArchive) {
@@ -357,7 +501,8 @@ function renderInvoiceList(pending, archive) {
 			btnMore.textContent = `Pokaż kolejne ${Math.min(RENDER_PAGE, remaining)} wcześniejsze (${remaining} pozostałych)`;
 			btnMore.addEventListener('click', () => {
 				renderedArchiveCount += RENDER_PAGE;
-				renderInvoiceList(invoiceState.pendingInvoices ?? [], invoiceState.recentArchive ?? []);
+				const inv = activeInvoices();
+				renderInvoiceList(inv.pendingInvoices ?? [], inv.recentArchive ?? []);
 			});
 			actionsRow.appendChild(btnMore);
 			inner.appendChild(actionsRow);
@@ -393,13 +538,11 @@ function buildInvoiceRow(inv, type) {
 	// Akcje na poziomie meta (wiersz 2, prawa kolumna)
 	const actionsHtml =
 		type === 'pending'
-			? `<div class="inv-actions">
-         <button class="inv-act inv-act-done" title="Oznacz jako przejrzaną">✓</button>
-       </div>`
+			? `<div class="inv-actions"><button class="inv-act inv-act-done" title="Oznacz jako przejrzaną">✓</button></div>`
 			: `<div class="inv-actions">
-         <button class="inv-act inv-act-star" title="Przywróć do nowych">★</button>
-         <button class="inv-act inv-act-hide" title="Ukryj z listy">✕</button>
-       </div>`;
+			<button class="inv-act inv-act-star" title="Przywróć do nowych">★</button>
+			<button class="inv-act inv-act-hide" title="Ukryj z listy">✕</button>
+		   </div>`;
 
 	// Grid: seller + portal (wiersz 1), meta + akcje (wiersz 2)
 	item.innerHTML = `
@@ -414,7 +557,7 @@ function buildInvoiceRow(inv, type) {
 
 	item.querySelector('.inv-portal').addEventListener('click', (e) => {
 		e.stopPropagation();
-		handleOpenInPortal(inv.ksefRef, config.environment);
+		handleOpenInPortal(inv.ksefRef, activeAccount()?.environment ?? 'production');
 	});
 
 	if (type === 'pending') {
@@ -440,17 +583,24 @@ function buildInvoiceRow(inv, type) {
 
 async function handleRestoreToPending(inv, itemEl) {
 	itemEl.classList.add('dismissing');
-	await chrome.runtime.sendMessage({ type: 'UNDO_NOTICED', invoiceId: inv.id });
-	invoiceState.pendingInvoices = [inv, ...(invoiceState.pendingInvoices ?? [])];
-	invoiceState.recentArchive = (invoiceState.recentArchive ?? []).filter((i) => i.id !== inv.id);
+	await chrome.runtime.sendMessage({ type: 'UNDO_NOTICED', invoiceId: inv.id, nip: activeNip });
+	const acc = activeAccount();
+	if (acc) {
+		acc.invoiceState.pendingInvoices = [inv, ...(acc.invoiceState.pendingInvoices ?? [])];
+		acc.invoiceState.recentArchive = (acc.invoiceState.recentArchive ?? []).filter((i) => i.id !== inv.id);
+		acc.pendingCount = acc.invoiceState.pendingInvoices.length;
+	}
 	renderMainView();
 }
 
 async function handleDismissArchive(inv, itemEl) {
 	itemEl.classList.add('dismissing');
-	await chrome.runtime.sendMessage({ type: 'DISMISS_ARCHIVE', invoiceId: inv.id });
-	invoiceState.recentArchive = (invoiceState.recentArchive ?? []).filter((i) => i.id !== inv.id);
-	invoiceState._lastDismissed = inv; // zapamiętaj do undo
+	await chrome.runtime.sendMessage({ type: 'DISMISS_ARCHIVE', invoiceId: inv.id, nip: activeNip });
+	const acc = activeAccount();
+	if (acc) {
+		acc.invoiceState._lastDismissed = inv; // zapamiętaj do undo
+		acc.invoiceState.recentArchive = (acc.invoiceState.recentArchive ?? []).filter((i) => i.id !== inv.id);
+	}
 	renderMainView();
 	showToast(inv, 'archive');
 }
@@ -458,10 +608,14 @@ async function handleDismissArchive(inv, itemEl) {
 async function handleMarkNoticed(inv, itemEl) {
 	// Animacja znikania
 	itemEl.classList.add('dismissing');
-	await chrome.runtime.sendMessage({ type: 'MARK_NOTICED', invoiceId: inv.id });
+	await chrome.runtime.sendMessage({ type: 'MARK_NOTICED', invoiceId: inv.id, nip: activeNip });
 	// Aktualizuj lokalny stan
-	invoiceState.pendingInvoices = (invoiceState.pendingInvoices ?? []).filter((i) => i.id !== inv.id);
-	invoiceState.recentArchive = [inv, ...(invoiceState.recentArchive ?? [])];
+	const acc = activeAccount();
+	if (acc) {
+		acc.invoiceState.pendingInvoices = (acc.invoiceState.pendingInvoices ?? []).filter((i) => i.id !== inv.id);
+		acc.invoiceState.recentArchive = [inv, ...(acc.invoiceState.recentArchive ?? [])];
+		acc.pendingCount = acc.invoiceState.pendingInvoices.length;
+	}
 	renderMainView();
 	showToast(inv);
 }
@@ -527,29 +681,40 @@ async function handleUndoNoticed() {
 
 	if (type === 'bulk') {
 		// Przywróć wszystkie z powrotem do pending
-		await chrome.runtime.sendMessage({ type: 'UNDO_MARK_ALL', invoices: snapshot });
-		invoiceState.pendingInvoices = [...(snapshot ?? []), ...(invoiceState.pendingInvoices ?? [])];
-		invoiceState.recentArchive = (invoiceState.recentArchive ?? []).filter(
-			(inv) => !(snapshot ?? []).find((s) => s.id === inv.id)
-		);
-	} else if (type === 'archive') {
-		await chrome.runtime.sendMessage({ type: 'UNDO_DISMISS_ARCHIVE', invoiceId: id });
-		const restored = invoiceState._lastDismissed;
-		if (restored) {
-			invoiceState.recentArchive = [restored, ...(invoiceState.recentArchive ?? [])].sort((a, b) =>
-				(b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || '')
+		await chrome.runtime.sendMessage({ type: 'UNDO_MARK_ALL', invoices: snapshot, nip: activeNip });
+		const acc = activeAccount();
+		if (acc) {
+			acc.invoiceState.pendingInvoices = [...(snapshot ?? []), ...(acc.invoiceState.pendingInvoices ?? [])];
+			acc.invoiceState.recentArchive = (acc.invoiceState.recentArchive ?? []).filter(
+				(inv) => !(snapshot ?? []).find((s) => s.id === inv.id)
 			);
-			delete invoiceState._lastDismissed;
-		} else {
-			await loadState();
+			acc.pendingCount = acc.invoiceState.pendingInvoices.length;
+		}
+	} else if (type === 'archive') {
+		await chrome.runtime.sendMessage({ type: 'UNDO_DISMISS_ARCHIVE', invoiceId: id, nip: activeNip });
+		const acc = activeAccount();
+		if (acc) {
+			const restored = acc.invoiceState._lastDismissed;
+			if (restored) {
+				acc.invoiceState.recentArchive = [restored, ...(acc.invoiceState.recentArchive ?? [])].sort((a, b) =>
+					(b.issueDate || b.fetchedAt || '').localeCompare(a.issueDate || a.fetchedAt || '')
+				);
+				delete acc.invoiceState._lastDismissed;
+			} else {
+				await loadState();
+			}
 		}
 	} else {
 		// pending → przywróć z archiwum
-		await chrome.runtime.sendMessage({ type: 'UNDO_NOTICED', invoiceId: id });
-		const restored = (invoiceState.recentArchive ?? []).find((i) => i.id === id);
-		if (restored) {
-			invoiceState.pendingInvoices = [restored, ...(invoiceState.pendingInvoices ?? [])];
-			invoiceState.recentArchive = (invoiceState.recentArchive ?? []).filter((i) => i.id !== id);
+		await chrome.runtime.sendMessage({ type: 'UNDO_NOTICED', invoiceId: id, nip: activeNip });
+		const acc = activeAccount();
+		if (acc) {
+			const restored = (acc.invoiceState.recentArchive ?? []).find((i) => i.id === id);
+			if (restored) {
+				acc.invoiceState.pendingInvoices = [restored, ...(acc.invoiceState.pendingInvoices ?? [])];
+				acc.invoiceState.recentArchive = (acc.invoiceState.recentArchive ?? []).filter((i) => i.id !== id);
+				acc.pendingCount = acc.invoiceState.pendingInvoices.length;
+			}
 		}
 	}
 
@@ -559,54 +724,8 @@ async function handleUndoNoticed() {
 // ─── Zdarzenia ────────────────────────────────────────────────────────────────
 
 function bindEvents() {
-	// Edycja nazwy firmy w ustawieniach
-	const scHint = document.getElementById('settingsCompanyHint');
-	const scInput = document.getElementById('settingsCompanyInput');
-	if (scHint && scInput) {
-		scHint.addEventListener('click', () => {
-			if (!scInput.readOnly) {
-				// ✓ – zatwierdź
-				saveSettingsCompanyName();
-			} else {
-				// ✏️ – odblokuj
-				scInput.readOnly = false;
-				scInput.style.cursor = 'text';
-				scInput.value = config.companyName ?? '';
-				scInput.focus();
-				scInput.select();
-				scHint.textContent = '✓';
-			}
-		});
-		scInput.addEventListener('keydown', (e) => {
-			if (e.key === 'Enter') {
-				e.preventDefault();
-				saveSettingsCompanyName();
-			}
-			if (e.key === 'Escape') {
-				cancelSettingsCompanyEdit();
-			}
-		});
-	}
-
-	document.getElementById('btnOpenOnboarding').addEventListener('click', async () => {
-		const W = 580,
-			H = 680,
-			MARGIN = 16;
-		let left = 100,
-			top = 60;
-		try {
-			const win = await chrome.windows.getCurrent();
-			left = (win.left ?? 0) + (win.width ?? 1200) - W - MARGIN;
-			top = (win.top ?? 0) + MARGIN;
-		} catch {}
-		chrome.windows.create({
-			url: chrome.runtime.getURL('onboarding.html'),
-			type: 'popup',
-			width: W,
-			height: H,
-			left,
-			top,
-		});
+	document.getElementById('btnOpenOnboarding').addEventListener('click', () => {
+		chrome.runtime.sendMessage({ type: 'OPEN_ONBOARDING', mode: 'setup' });
 		window.close();
 	});
 
@@ -625,6 +744,7 @@ function bindEvents() {
 			nipInfo.style.display = 'none';
 		}
 	});
+
 	// OTP boxes dla viewPin i viewNewToken
 	initPopupOtp(['pinBox0', 'pinBox1', 'pinBox2', 'pinBox3'], 'pinToggle', handlePinConfirm);
 	initPopupOtp(
@@ -640,9 +760,11 @@ function bindEvents() {
 	document.getElementById('btnBackFromSettings').addEventListener('click', async () => {
 		await loadState();
 		renderMainView();
-		showView('viewMain');
 	});
-	document.getElementById('btnRemoveToken').addEventListener('click', handleRemoveToken);
+	document.getElementById('btnAddNip')?.addEventListener('click', () => {
+		chrome.runtime.sendMessage({ type: 'OPEN_ONBOARDING', mode: 'add' });
+		// Nie zamykamy popupa – czekamy na storage.onChanged gdy nowe konto zostanie dodane
+	});
 	document.getElementById('btnErrorBack').addEventListener('click', determineAndShowView);
 	document.getElementById('btnLogsBack').addEventListener('click', determineAndShowView);
 	document.getElementById('btnClearLogs').addEventListener('click', async () => {
@@ -826,9 +948,8 @@ async function handlePinConfirm() {
 	try {
 		// Przy UI-lock (needsPin=false) background akceptuje dowolny PIN przez refresh token.
 		// Weryfikujemy kryptograficznie przed wysłaniem żeby lockout działał poprawnie.
-		const psData = await chrome.storage.local.get('pollState');
-		const needsPin = psData.pollState?.needsPin ?? false;
-		if (!needsPin) {
+		const ps = activePollState();
+		if (!ps.needsPin) {
 			const verifyResponse = await chrome.runtime.sendMessage({ type: 'VERIFY_PIN', pin });
 			if (!verifyResponse.ok) {
 				const attempts = (lockout.attempts ?? 0) + 1;
@@ -847,7 +968,7 @@ async function handlePinConfirm() {
 			}
 		}
 
-		const response = await chrome.runtime.sendMessage({ type: 'POLL_NOW', pin });
+		const response = await chrome.runtime.sendMessage({ type: 'POLL_NOW', pin, nip: activeNip });
 
 		if (response.ok) {
 			await chrome.storage.local.remove('pinLockout');
@@ -920,7 +1041,12 @@ async function handleNewTokenConfirm() {
 	btn.innerHTML = `<div class="spinner"></div> Zapisuję...`;
 
 	try {
-		const response = await chrome.runtime.sendMessage({ type: 'UPDATE_TOKEN', token, pin, nip: nipFromToken });
+		const response = await chrome.runtime.sendMessage({
+			type: 'UPDATE_TOKEN',
+			token,
+			pin,
+			nip: nipFromToken ?? activeNip,
+		});
 		if (response.ok) {
 			document.getElementById('newTokenInput').value = '';
 			['newTokenPinBox0', 'newTokenPinBox1', 'newTokenPinBox2', 'newTokenPinBox3'].forEach((id) => {
@@ -930,8 +1056,8 @@ async function handleNewTokenConfirm() {
 					b.classList.remove('filled');
 				}
 			});
-			await chrome.runtime.sendMessage({ type: 'CLEAR_BACKOFF' });
-			const pollResp = await chrome.runtime.sendMessage({ type: 'POLL_NOW', pin });
+			await chrome.runtime.sendMessage({ type: 'CLEAR_BACKOFF', nip: activeNip });
+			const pollResp = await chrome.runtime.sendMessage({ type: 'POLL_NOW', pin, nip: activeNip });
 			await loadState();
 			if (pollResp.ok) {
 				renderMainView();
@@ -954,10 +1080,10 @@ async function handleCheckNow() {
 	const btn = document.getElementById('btnCheckNow');
 	btn.disabled = true;
 	btn.innerHTML = `<div class="spinner"></div> Sprawdzam...`;
-	await chrome.runtime.sendMessage({ type: 'CLEAR_BACKOFF' }).catch(() => {});
+	await chrome.runtime.sendMessage({ type: 'CLEAR_BACKOFF', nip: activeNip }).catch(() => {});
 
 	try {
-		const response = await chrome.runtime.sendMessage({ type: 'POLL_NOW' });
+		const response = await chrome.runtime.sendMessage({ type: 'POLL_NOW', nip: activeNip });
 		await loadState();
 		if (response.ok) {
 			renderMainView();
@@ -989,11 +1115,10 @@ async function handleReinitArchive() {
 	errEl.textContent = '';
 
 	try {
-		const response = await chrome.runtime.sendMessage({ type: 'REINITIALIZE_ARCHIVE' });
+		const response = await chrome.runtime.sendMessage({ type: 'REINITIALIZE_ARCHIVE', nip: activeNip });
 		if (response.ok) {
 			await loadState();
 			renderMainView();
-			showView('viewMain');
 			showInfoToast(`✓ Pobrano ${response.count ?? 0} faktur`);
 		} else if (response.status === 401 || response.error?.includes('PIN') || response.error?.includes('Sesja')) {
 			errEl.textContent = 'Sesja wygasła. Wróć i użyj \u201eSprawdź teraz\u201d żeby ponownie się zalogować.';
@@ -1020,132 +1145,213 @@ async function handleReinitArchive() {
 
 function showSettingsView() {
 	document.getElementById('selectInterval').value = String(config.pollIntervalMinutes ?? 60);
-	document.getElementById('selectEnv').value = config.environment ?? 'production';
 	document.getElementById('selectPendingDays').value = String(config.pendingDaysThreshold ?? 'month');
-
-	const companyEl = document.getElementById('settingsCompany');
-	const companyInput = document.getElementById('settingsCompanyInput');
-	if (config.nip) {
-		const label = '🏢 NIP ' + config.nip + (config.companyName ? '  ·  ' + config.companyName : '');
-		companyInput.value = label;
-		companyEl.style.display = 'block';
-	} else {
-		companyEl.style.display = 'none';
-	}
 	document.getElementById('toggleNotifications').checked = !!config.notificationsEnabled;
+	renderNipList();
+
+	// settings-wrap = 598 - header(42) - footer(30) - actions(102) = 424px
+	const wrap = document.querySelector('.settings-wrap');
+	if (wrap) {
+		wrap.style.minHeight = '400px';
+		wrap.style.maxHeight = '400px';
+	}
+
 	showView('viewSettings');
 }
 
-async function saveSettingsCompanyName() {
-	const scInput = document.getElementById('settingsCompanyInput');
-	const scHint = document.getElementById('settingsCompanyHint');
-	const newName = scInput.value.trim() || null;
-	config.companyName = newName;
-	await chrome.storage.local.set({ config });
-	scInput.readOnly = true;
-	scInput.style.cursor = 'default';
-	scHint.textContent = '✏️';
-	// odśwież wyświetlany label (z NIP)
-	const label = '🏢 NIP ' + config.nip + (newName ? '  ·  ' + newName : '');
-	scInput.value = label;
-}
+function renderNipList() {
+	const container = document.getElementById('nipListSettings');
+	if (!container) return;
+	container.innerHTML = '';
 
-function cancelSettingsCompanyEdit() {
-	const scInput = document.getElementById('settingsCompanyInput');
-	const scHint = document.getElementById('settingsCompanyHint');
-	scInput.readOnly = true;
-	scInput.style.cursor = 'default';
-	scHint.textContent = '✏️';
-	const label = '🏢 NIP ' + config.nip + (config.companyName ? '  ·  ' + config.companyName : '');
-	scInput.value = label;
+	accounts.forEach((account) => {
+		const row = document.createElement('div');
+		row.className = 'nip-list-row';
+		row.style.cssText = 'position:relative;margin-bottom:6px;display:flex;align-items:center;gap:6px;';
+
+		// Jednolinijkowy input: 🏢 NIP · Nazwa
+		const inputWrap = document.createElement('div');
+		inputWrap.style.cssText = 'position:relative;flex:1;min-width:0;';
+
+		const input = document.createElement('input');
+		input.type = 'text';
+		input.className = 'nip-card-name-input';
+		const buildLabel = (name) => `🏢 NIP ${account.nip}${name ? '  ·  ' + name : ''}`;
+		input.value = buildLabel(account.companyName);
+		input.readOnly = true;
+		input.style.cursor = 'default';
+		input.setAttribute('aria-label', `NIP ${account.nip}`);
+
+		const hint = document.createElement('span');
+		hint.style.cssText =
+			'position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:12px;cursor:pointer;';
+		hint.textContent = '✏️';
+		hint.setAttribute('role', 'button');
+		hint.setAttribute('tabindex', '0');
+		hint.setAttribute('aria-label', 'Edytuj nazwę firmy');
+
+		const saveName = async () => {
+			// Pole w trybie edycji zawiera tylko nazwę – czytamy wprost
+			const newName = input.value.trim() || null;
+			account.companyName = newName;
+			const stored = (await chrome.storage.local.get('accounts')).accounts ?? {};
+			if (stored[account.nip]) {
+				stored[account.nip].companyName = newName;
+				await chrome.storage.local.set({ accounts: stored });
+			}
+			input.value = buildLabel(newName);
+			input.readOnly = true;
+			input.style.cursor = 'default';
+			hint.textContent = '✏️';
+			if (account.nip === activeNip) renderNipSelector();
+		};
+
+		const startEdit = () => {
+			// W trybie edycji pole zawiera tylko nazwę (bez prefiksu)
+			input.value = account.companyName ?? '';
+			input.readOnly = false;
+			input.style.cursor = 'text';
+			input.focus();
+			input.select();
+			hint.textContent = '✓';
+		};
+
+		hint.addEventListener('click', () => (input.readOnly ? startEdit() : saveName()));
+		hint.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				hint.click();
+			}
+		});
+		input.addEventListener('keydown', (e) => {
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				saveName();
+			}
+			if (e.key === 'Escape') {
+				input.value = buildLabel(account.companyName);
+				input.readOnly = true;
+				input.style.cursor = 'default';
+				hint.textContent = '✏️';
+			}
+		});
+
+		inputWrap.appendChild(input);
+		inputWrap.appendChild(hint);
+
+		const btnRemove = document.createElement('button');
+		btnRemove.className = 'nip-list-remove';
+		btnRemove.innerHTML = '🗑️';
+		btnRemove.setAttribute('aria-label', `Usuń NIP ${account.nip}`);
+		btnRemove.addEventListener('click', () => handleRemoveNip(account.nip));
+
+		row.appendChild(inputWrap);
+		row.appendChild(btnRemove);
+		container.appendChild(row);
+	});
 }
 
 async function handleSaveSettings() {
 	// jeśli nazwa firmy była w trakcie edycji – zapisujemy co jest w polu
 	const scInput = document.getElementById('settingsCompanyInput');
 	if (scInput && !scInput.readOnly) {
-		config.companyName = scInput.value.trim() || null;
-		cancelSettingsCompanyEdit();
+		await saveSettingsCompanyName();
 	}
+
+	// Globalna konfiguracja
 	config.pollIntervalMinutes = parseInt(document.getElementById('selectInterval').value, 10);
-	config.environment = document.getElementById('selectEnv').value;
-	const rawDays = document.getElementById('selectPendingDays').value;
-	config.pendingDaysThreshold = rawDays === 'month' ? 'month' : parseInt(rawDays, 10);
+	config.pendingDaysThreshold = (() => {
+		const v = document.getElementById('selectPendingDays').value;
+		return v === 'month' ? 'month' : parseInt(v, 10);
+	})();
 	config.notificationsEnabled = document.getElementById('toggleNotifications').checked;
 	await chrome.storage.local.set({ config });
 	await chrome.runtime.sendMessage({ type: 'UPDATE_INTERVAL', minutes: config.pollIntervalMinutes });
-	document.getElementById('envLabel').textContent =
-		{ production: 'PRD', demo: 'DEMO', test: 'TEST' }[config.environment] ?? 'PRD';
+
+	const labels = { production: 'PRD', demo: 'DEMO', test: 'TEST' };
+	document.getElementById('envLabel').textContent = labels[activeAccount()?.environment ?? 'production'] ?? 'PRD';
+
 	await loadState();
 	renderMainView();
-	showView('viewMain');
 }
 
-async function handleRemoveToken() {
+async function handleRemoveNip(nip) {
+	if (!nip) return;
+
 	const modal = document.getElementById('confirmModal');
 	const btnOk = document.getElementById('confirmOk');
 	const btnCxl = document.getElementById('confirmCancel');
+	const titleEl = document.getElementById('confirmModalTitle');
+	const descEl = document.getElementById('confirmModalDesc');
+	const isLast = accounts.length === 1;
+
+	if (titleEl) titleEl.textContent = isLast ? 'Usuń token i konfigurację?' : `Usuń NIP ${nip}?`;
+	if (descEl)
+		descEl.textContent = isLast
+			? 'Rozszerzenie przestanie działać. Będziesz musiał przejść onboarding od nowa.'
+			: `Faktury i historia dla NIP ${nip} zostaną usunięte.`;
 
 	modal.style.display = 'flex';
-	btnCxl.focus(); // fokus na "Anuluj" przy otwarciu – bezpieczniejsza opcja domyślna
+	btnCxl.focus();
 
-	await new Promise((resolve) => {
-		const focusableEls = [btnCxl, btnOk];
-		const trapFocus = (e) => {
-			if (e.key !== 'Tab') return;
-			const first = focusableEls[0];
-			const last = focusableEls[focusableEls.length - 1];
-			if (e.shiftKey) {
-				if (document.activeElement === first) {
-					e.preventDefault();
-					last.focus();
-				}
-			} else {
-				if (document.activeElement === last) {
-					e.preventDefault();
-					first.focus();
-				}
-			}
-		};
-		const cleanup = (doIt) => {
+	const confirmed = await new Promise((resolve) => {
+		const cleanup = (result) => {
 			modal.style.display = 'none';
 			btnOk.removeEventListener('click', onOk);
-			btnCxl.removeEventListener('click', onCancel);
+			btnCxl.removeEventListener('click', onCxl);
 			modal.removeEventListener('click', onOverlay);
 			document.removeEventListener('keydown', onKey);
 			document.removeEventListener('keydown', trapFocus);
-			resolve(doIt);
+			resolve(result);
+		};
+		const trapFocus = (e) => {
+			if (e.key !== 'Tab') return;
+			if (e.shiftKey) {
+				if (document.activeElement === btnCxl) {
+					e.preventDefault();
+					btnOk.focus();
+				}
+			} else {
+				if (document.activeElement === btnOk) {
+					e.preventDefault();
+					btnCxl.focus();
+				}
+			}
 		};
 		const onOk = () => cleanup(true);
-		const onCancel = () => cleanup(false);
+		const onCxl = () => cleanup(false);
 		const onOverlay = (e) => {
 			if (e.target === modal) cleanup(false);
 		};
 		const onKey = (e) => {
 			if (e.key === 'Escape') {
 				e.preventDefault();
-				e.stopPropagation();
 				cleanup(false);
 			}
 		};
 		btnOk.addEventListener('click', onOk);
-		btnCxl.addEventListener('click', onCancel);
+		btnCxl.addEventListener('click', onCxl);
 		modal.addEventListener('click', onOverlay);
 		document.addEventListener('keydown', onKey);
 		document.addEventListener('keydown', trapFocus);
-	}).then(async (confirmed) => {
-		if (!confirmed) return;
-		await chrome.storage.local.clear();
+	});
+
+	if (!confirmed) return;
+
+	const response = await chrome.runtime.sendMessage({ type: 'REMOVE_ACCOUNT', nip });
+	if (response.ok && response.remaining.length === 0) {
 		try {
 			await chrome.action.setBadgeText({ text: '' });
-		} catch {
-			/* ignore */
-		}
+		} catch {}
+		accounts = [];
+		activeNip = null;
 		config = {};
-		pollState = {};
-		invoiceState = { allSeenIds: [], pendingInvoices: [], recentArchive: [], lastQueryTime: null };
 		showView('viewSetup');
-	});
+	} else {
+		await loadState();
+		renderMainView();
+		showSettingsView();
+	}
 }
 
 // ─── Logi ─────────────────────────────────────────────────────────────────────
@@ -1172,7 +1378,7 @@ function renderLogsList(logs) {
 		entry.className = 'log-entry error';
 		entry.innerHTML = `
       <div class="log-time">${new Date(e.time).toLocaleString('pl-PL')}</div>
-      <div><span class="log-code">${escHtml(e.code ?? 'ERR')}</span></div>
+      <div><span class="log-code">${escHtml(e.code ?? 'ERR')}</span>${e.nip ? ` <span style="color:#888">(${e.nip})</span>` : ''}</div>
       <div class="log-msg">${escHtml(e.message ?? '')}</div>`;
 		listEl.appendChild(entry);
 	});

@@ -14,7 +14,8 @@
 			}
 
 			html {
-				scrollbar-gutter: stable;
+				scrollbar-width: thin;
+				scrollbar-color: #b0c8e0 transparent;
 			}
 
 			body {
@@ -671,28 +672,6 @@
 						></div>
 					</div>
 
-					<!-- Środowisko -->
-					<div class="form-group">
-						<label class="form-label" id="envGroupLabel">Środowisko KSeF</label>
-						<div class="radio-group" role="radiogroup" aria-labelledby="envGroupLabel">
-							<label class="radio-option selected" id="optProd">
-								<input type="radio" name="env" value="production" checked />
-								<span class="radio-label">🏭 Produkcja</span>
-								<span class="radio-desc">ksef.podatki.gov.pl</span>
-							</label>
-							<label class="radio-option" id="optDemo">
-								<input type="radio" name="env" value="demo" />
-								<span class="radio-label">🧪 Demo (TR)</span>
-								<span class="radio-desc">Przedprodukcja</span>
-							</label>
-							<label class="radio-option" id="optTest">
-								<input type="radio" name="env" value="test" />
-								<span class="radio-label">⚗️ Test (TE)</span>
-								<span class="radio-desc">web2te-ksef.mf.gov.pl</span>
-							</label>
-						</div>
-					</div>
-
 					<!-- Collapsible: Jak wygenerować token -->
 					<div class="collapsible" id="howToCollapsible">
 						<button
@@ -798,7 +777,10 @@
 					<div class="pin-section" id="pinSection">
 						<hr class="pin-divider" />
 						<div class="slide-in">
-							<div style="font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 10px">
+							<div
+								id="pinSectionTitle"
+								style="font-size: 13px; font-weight: 700; color: #1a1a2e; margin-bottom: 10px"
+							>
 								🔒 Ustaw PIN
 							</div>
 							<div style="font-size: 11px; color: #777; margin-bottom: 14px; line-height: 1.5">
@@ -1000,12 +982,22 @@
 				</div>
 				<div class="card-footer" style="justify-content: flex-end">
 					<button class="btn btn-primary" id="btnClose" style="display: none">Zamknij ✕</button>
+					<button class="btn btn-secondary" id="btnAddAnother" style="display: none">
+						+ Dodaj kolejny NIP
+					</button>
 				</div>
 				<div
 					id="toolbarHint"
-					style="display: none; font-size: 11px; color: #888; text-align: center; padding: 0 28px 14px"
+					style="
+						display: none;
+						font-size: 11px;
+						color: #888;
+						text-align: center;
+						padding: 0 28px 14px;
+						line-height: 1.6;
+					"
 				>
-					Kliknij ikonę rozszerzenia w pasku przeglądarki →
+					Kliknij ikonę rozszerzenia w pasku przeglądarki, aby otworzyć KSeF Monitor →
 				</div>
 			</div>
 		</div>
