@@ -13,16 +13,17 @@
 				padding: 0;
 			}
 
+			html {
+				overflow: hidden;
+			}
+
 			body {
 				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 				font-size: 14px;
 				color: #1a1a2e;
 				background: #fff;
 				width: 340px;
-				overflow-y: auto;
-				scrollbar-gutter: stable;
-				scrollbar-width: thin;
-				scrollbar-color: #b0c8e0 transparent;
+				overflow: hidden;
 			}
 
 			/* ── Header ── */
@@ -169,6 +170,7 @@
 			/* ── Main ── */
 			.main-wrap {
 				padding: 10px 14px 0;
+				position: relative;
 			}
 
 			/* Status row */
@@ -294,21 +296,13 @@
 
 			/* Invoice list */
 			.invoice-list {
-				height: 320px;
+				height: 385px;
 				overflow-y: auto;
 				border: 1px solid #e6edf4;
 				border-radius: 8px;
 				margin-bottom: 10px;
-				scrollbar-gutter: stable;
 				scrollbar-width: thin;
 				scrollbar-color: #b0c8e0 transparent;
-			}
-			.invoice-list::-webkit-scrollbar {
-				width: 3px;
-			}
-			.invoice-list::-webkit-scrollbar-thumb {
-				background: #b0c8e0;
-				border-radius: 2px;
 			}
 			/* Section label inside list */
 			.list-section-label {
@@ -703,7 +697,11 @@
 
 			/* ── Toast ── */
 			.toast {
-				margin: 4px 0 2px;
+				position: absolute;
+				bottom: 0;
+				left: 0;
+				right: 0;
+				margin: 0 4px;
 				background: #323232;
 				color: white;
 				border-radius: 8px;
@@ -722,6 +720,7 @@
 					opacity 0.18s,
 					padding 0.2s;
 				pointer-events: none;
+				z-index: 10;
 			}
 			.toast.visible {
 				max-height: 44px;
@@ -819,6 +818,24 @@
 			/* ── Settings ── */
 			.settings-wrap {
 				padding: 14px;
+				overflow-y: auto;
+				scrollbar-width: thin;
+				scrollbar-color: #b0c8e0 transparent;
+				scrollbar-gutter: stable;
+				flex: 1;
+			}
+			.settings-actions {
+				padding: 8px 14px 10px;
+				background: #fff;
+				border-top: 1px solid #eee;
+				flex-shrink: 0;
+			}
+			#viewSettings {
+				display: none;
+				flex-direction: column;
+			}
+			#viewSettings.active {
+				display: flex;
 			}
 			.section-title {
 				font-size: 10px;
@@ -1275,7 +1292,7 @@
 					</div>
 				</div>
 
-				<!-- Toast – tuż pod listą, wstrzymuje się na hover -->
+				<!-- Toast nakłada się na dolną krawędź listy faktur -->
 				<div class="toast" id="toast" role="status" aria-live="assertive" aria-atomic="true">
 					<span class="toast-msg" id="toastMsg"></span>
 					<button class="toast-undo" id="toastUndo">Cofnij</button>
@@ -1346,9 +1363,10 @@
 						<span class="toggle-slider"></span>
 					</label>
 				</div>
-
-				<hr class="sep" />
-				<div style="display: flex; gap: 8px; margin-bottom: 8px">
+			</div>
+			<!-- Wszystkie przyciski akcji przyklejone do dołu, poza scrollowalnym settings-wrap -->
+			<div class="settings-actions">
+				<div style="display: flex; gap: 8px; margin-bottom: 6px">
 					<button class="btn btn-primary" id="btnSaveSettings" style="flex: 1">💾 Zapisz</button>
 				</div>
 				<button class="btn btn-secondary" id="btnReinitArchive" style="width: 100%; margin-bottom: 6px">
@@ -1407,7 +1425,7 @@
 
 		<script src="popup.js"></script>
 
-		<!-- Modal potwierdzenia usunięcia tokenu -->
+		<!-- Modal potwierdzenia usunięcia NIP -->
 		<div
 			id="confirmModal"
 			role="dialog"
@@ -1436,16 +1454,14 @@
 				<div
 					id="confirmModalTitle"
 					style="font-size: 13px; font-weight: 600; color: #1a1a2e; margin-bottom: 8px"
-				>
-					Usuń token i konfigurację?
-				</div>
-				<div style="font-size: 12px; color: #666; margin-bottom: 16px; line-height: 1.5">
-					Rozszerzenie przestanie działać. Będziesz musiał przejść onboarding od nowa.
-				</div>
+				></div>
+				<div
+					id="confirmModalDesc"
+					style="font-size: 12px; color: #666; margin-bottom: 16px; line-height: 1.5"
+				></div>
 				<div style="display: flex; gap: 8px; justify-content: flex-end">
 					<button
 						id="confirmCancel"
-						class="modal-btn"
 						style="
 							background: #f0f0f0;
 							border: none;
@@ -1460,7 +1476,6 @@
 					</button>
 					<button
 						id="confirmOk"
-						class="modal-btn"
 						style="
 							background: #c62828;
 							border: none;

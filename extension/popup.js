@@ -166,7 +166,6 @@ function determineAndShowView() {
 	}
 
 	renderMainView();
-	showView('viewMain');
 }
 
 function showView(id) {
@@ -194,6 +193,8 @@ function showView(id) {
 // ─── Widok główny ─────────────────────────────────────────────────────────────
 
 function renderMainView() {
+	// Upewnij się że viewMain jest widoczny zanim zmierzymy layout (getBoundingClientRect)
+	showView('viewMain');
 	const account = activeAccount();
 	const inv = activeInvoices();
 	const ps = activePollState();
@@ -226,6 +227,22 @@ function renderMainView() {
 	document.getElementById('envLabel').textContent = labels[account?.environment ?? 'production'] ?? 'PRD';
 
 	renderStatusBadge();
+
+	// Ustaw wysokość listy używając znanych stałych (z logów):
+	// header=42, footer=30, btnRow=53, mainWrap fixed parts (status+counter+padding+margins)=90
+	// Cel: popup = 596px (Chrome limit 600px - 4px zapasu)
+	{
+		const HEADER = 42,
+			FOOTER = 30,
+			BTN_ROW = 53,
+			WRAP_FIXED = 90,
+			MAX_H = 600;
+		const nipSel = document.getElementById('nipSelector');
+		const nipH = nipSel && nipSel.style.display !== 'none' ? nipSel.getBoundingClientRect().height + 8 : 0;
+		const list = document.getElementById('invoiceList');
+		if (list) list.style.height = Math.max(150, MAX_H - HEADER - WRAP_FIXED - nipH - BTN_ROW - FOOTER) + 'px';
+	}
+
 	renderInvoiceList(pending, archive);
 }
 
@@ -743,7 +760,6 @@ function bindEvents() {
 	document.getElementById('btnBackFromSettings').addEventListener('click', async () => {
 		await loadState();
 		renderMainView();
-		showView('viewMain');
 	});
 	document.getElementById('btnAddNip')?.addEventListener('click', () => {
 		chrome.runtime.sendMessage({ type: 'OPEN_ONBOARDING', mode: 'add' });
@@ -1103,7 +1119,6 @@ async function handleReinitArchive() {
 		if (response.ok) {
 			await loadState();
 			renderMainView();
-			showView('viewMain');
 			showInfoToast(`✓ Pobrano ${response.count ?? 0} faktur`);
 		} else if (response.status === 401 || response.error?.includes('PIN') || response.error?.includes('Sesja')) {
 			errEl.textContent = 'Sesja wygasła. Wróć i użyj \u201eSprawdź teraz\u201d żeby ponownie się zalogować.';
@@ -1133,6 +1148,14 @@ function showSettingsView() {
 	document.getElementById('selectPendingDays').value = String(config.pendingDaysThreshold ?? 'month');
 	document.getElementById('toggleNotifications').checked = !!config.notificationsEnabled;
 	renderNipList();
+
+	// settings-wrap = 598 - header(42) - footer(30) - actions(102) = 424px
+	const wrap = document.querySelector('.settings-wrap');
+	if (wrap) {
+		wrap.style.minHeight = '400px';
+		wrap.style.maxHeight = '400px';
+	}
+
 	showView('viewSettings');
 }
 
@@ -1250,7 +1273,6 @@ async function handleSaveSettings() {
 
 	await loadState();
 	renderMainView();
-	showView('viewMain');
 }
 
 async function handleRemoveNip(nip) {
@@ -1259,11 +1281,10 @@ async function handleRemoveNip(nip) {
 	const modal = document.getElementById('confirmModal');
 	const btnOk = document.getElementById('confirmOk');
 	const btnCxl = document.getElementById('confirmCancel');
-
-	// Dostosuj tekst modalu
 	const titleEl = document.getElementById('confirmModalTitle');
-	const descEl = modal.querySelector('[style*="margin-bottom: 16px"]');
+	const descEl = document.getElementById('confirmModalDesc');
 	const isLast = accounts.length === 1;
+
 	if (titleEl) titleEl.textContent = isLast ? 'Usuń token i konfigurację?' : `Usuń NIP ${nip}?`;
 	if (descEl)
 		descEl.textContent = isLast
@@ -1271,71 +1292,66 @@ async function handleRemoveNip(nip) {
 			: `Faktury i historia dla NIP ${nip} zostaną usunięte.`;
 
 	modal.style.display = 'flex';
-	btnCxl.focus(); // fokus na "Anuluj" przy otwarciu – bezpieczniejsza opcja domyślna
+	btnCxl.focus();
 
-	await new Promise((resolve) => {
-		const focusableEls = [btnCxl, btnOk];
-		const trapFocus = (e) => {
-			if (e.key !== 'Tab') return;
-			const first = focusableEls[0];
-			const last = focusableEls[focusableEls.length - 1];
-			if (e.shiftKey) {
-				if (document.activeElement === first) {
-					e.preventDefault();
-					last.focus();
-				}
-			} else {
-				if (document.activeElement === last) {
-					e.preventDefault();
-					first.focus();
-				}
-			}
-		};
-		const cleanup = (doIt) => {
+	const confirmed = await new Promise((resolve) => {
+		const cleanup = (result) => {
 			modal.style.display = 'none';
 			btnOk.removeEventListener('click', onOk);
-			btnCxl.removeEventListener('click', onCancel);
+			btnCxl.removeEventListener('click', onCxl);
 			modal.removeEventListener('click', onOverlay);
 			document.removeEventListener('keydown', onKey);
 			document.removeEventListener('keydown', trapFocus);
-			resolve(doIt);
+			resolve(result);
+		};
+		const trapFocus = (e) => {
+			if (e.key !== 'Tab') return;
+			if (e.shiftKey) {
+				if (document.activeElement === btnCxl) {
+					e.preventDefault();
+					btnOk.focus();
+				}
+			} else {
+				if (document.activeElement === btnOk) {
+					e.preventDefault();
+					btnCxl.focus();
+				}
+			}
 		};
 		const onOk = () => cleanup(true);
-		const onCancel = () => cleanup(false);
+		const onCxl = () => cleanup(false);
 		const onOverlay = (e) => {
 			if (e.target === modal) cleanup(false);
 		};
 		const onKey = (e) => {
 			if (e.key === 'Escape') {
 				e.preventDefault();
-				e.stopPropagation();
 				cleanup(false);
 			}
 		};
 		btnOk.addEventListener('click', onOk);
-		btnCxl.addEventListener('click', onCancel);
+		btnCxl.addEventListener('click', onCxl);
 		modal.addEventListener('click', onOverlay);
 		document.addEventListener('keydown', onKey);
 		document.addEventListener('keydown', trapFocus);
-	}).then(async (confirmed) => {
-		if (!confirmed) return;
-
-		const response = await chrome.runtime.sendMessage({ type: 'REMOVE_ACCOUNT', nip });
-		if (response.ok && response.remaining.length === 0) {
-			// Ostatni NIP – wyczyść i wróć do setupu
-			try {
-				await chrome.action.setBadgeText({ text: '' });
-			} catch {}
-			accounts = [];
-			activeNip = null;
-			config = {};
-			showView('viewSetup');
-		} else {
-			await loadState();
-			renderMainView();
-			showSettingsView();
-		}
 	});
+
+	if (!confirmed) return;
+
+	const response = await chrome.runtime.sendMessage({ type: 'REMOVE_ACCOUNT', nip });
+	if (response.ok && response.remaining.length === 0) {
+		try {
+			await chrome.action.setBadgeText({ text: '' });
+		} catch {}
+		accounts = [];
+		activeNip = null;
+		config = {};
+		showView('viewSetup');
+	} else {
+		await loadState();
+		renderMainView();
+		showSettingsView();
+	}
 }
 
 // ─── Logi ─────────────────────────────────────────────────────────────────────
