@@ -466,9 +466,10 @@ function renderInvoiceList(pending, archive) {
 		inner.appendChild(actionsRow);
 
 		body.appendChild(inner);
+		const pendingLabel = makeSectionLabel(`Nowe (${pending.length})`, 'pending', body, 'sectionBodyPending');
+		list.appendChild(pendingLabel);
+		list.appendChild(body);
 		if (hasArchive) {
-			const pendingLabel = makeSectionLabel(`Nowe (${pending.length})`, 'pending', body, 'sectionBodyPending');
-			list.appendChild(pendingLabel);
 			// Ustaw top dla "Wcześniejsze" po wyrenderowaniu Nowe – sticky stacking
 			requestAnimationFrame(() => {
 				const h = pendingLabel.getBoundingClientRect().height;
@@ -476,7 +477,6 @@ function renderInvoiceList(pending, archive) {
 				if (archiveLabel) archiveLabel.style.top = `${h}px`;
 			});
 		}
-		list.appendChild(body);
 	}
 
 	if (hasArchive) {
