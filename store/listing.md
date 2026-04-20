@@ -27,7 +27,7 @@ Po jednorazowej konfiguracji (wklejenie tokenu KSeF, ustawienie PIN-u) rozszerze
 • Lista faktur z nazwą wystawcy, numerem i kwotą brutto
 • Oznaczanie faktur jako przejrzane z możliwością cofnięcia
 • Opcjonalne powiadomienia systemowe przy nowej fakturze
-• Obsługa środowisk Produkcja, Demo (TR) i Test (TE)
+• Obsługa wielu NIP-ów – monitoruj kilka działalności jednocześnie
 
 **Bezpieczeństwo**
 
@@ -60,7 +60,7 @@ After a one-time setup (paste your KSeF token, set a PIN), the extension works o
 • Invoice list with vendor name, number, and gross amount
 • Mark invoices as reviewed with undo support
 • Optional system notifications for new invoices
-• Support for Production, Demo (TR), and Test (TE) environments
+• Multi-NIP support – monitor multiple businesses simultaneously
 
 **Security**
 

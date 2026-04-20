@@ -13,12 +13,17 @@
 				padding: 0;
 			}
 
+			html {
+				overflow: hidden;
+			}
+
 			body {
 				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 				font-size: 14px;
 				color: #1a1a2e;
 				background: #fff;
 				width: 340px;
+				overflow: hidden;
 			}
 
 			/* ── Header ── */
@@ -55,7 +60,7 @@
 
 			/* ── Setup ── */
 			.setup-wrap {
-				padding: 16px;
+				padding: 14px;
 			}
 			.setup-info {
 				background: #e8f0f8;
@@ -69,7 +74,7 @@
 
 			/* ── PIN ── */
 			.pin-wrap {
-				padding: 16px;
+				padding: 14px;
 				text-align: center;
 			}
 			.pin-title {
@@ -164,7 +169,8 @@
 
 			/* ── Main ── */
 			.main-wrap {
-				padding: 10px 12px 0;
+				padding: 10px 14px 0;
+				position: relative;
 			}
 
 			/* Status row */
@@ -290,23 +296,14 @@
 
 			/* Invoice list */
 			.invoice-list {
-				max-height: 320px;
+				height: 385px;
 				overflow-y: auto;
 				border: 1px solid #e6edf4;
 				border-radius: 8px;
 				margin-bottom: 10px;
-				scrollbar-gutter: stable;
-				scrollbar-width: thin; /* Firefox: thin | auto | none */
-				scrollbar-color: #b0c8e0 transparent; /* Firefox: thumb track */
+				scrollbar-width: thin;
+				scrollbar-color: #b0c8e0 transparent;
 			}
-			.invoice-list::-webkit-scrollbar {
-				width: 3px;
-			}
-			.invoice-list::-webkit-scrollbar-thumb {
-				background: #b0c8e0;
-				border-radius: 2px;
-			}
-
 			/* Section label inside list */
 			.list-section-label {
 				font-size: 10px;
@@ -609,7 +606,7 @@
 				flex-direction: column;
 				align-items: center;
 				justify-content: center;
-				padding: 24px 16px 20px;
+				height: 100%;
 				gap: 6px;
 			}
 			.empty-state-icon {
@@ -629,7 +626,7 @@
 
 			/* ── Logs view ── */
 			.logs-wrap {
-				padding: 12px 14px 14px;
+				padding: 14px;
 				display: flex;
 				flex-direction: column;
 				height: 100%;
@@ -666,6 +663,8 @@
 				display: flex;
 				flex-direction: column;
 				gap: 6px;
+				scrollbar-width: thin;
+				scrollbar-color: #b0c8e0 transparent;
 			}
 			.log-entry {
 				font-size: 11px;
@@ -700,7 +699,11 @@
 
 			/* ── Toast ── */
 			.toast {
-				margin: 4px 0 2px;
+				position: absolute;
+				bottom: 0;
+				left: 0;
+				right: 0;
+				margin: 0 4px;
 				background: #323232;
 				color: white;
 				border-radius: 8px;
@@ -719,6 +722,7 @@
 					opacity 0.18s,
 					padding 0.2s;
 				pointer-events: none;
+				z-index: 10;
 			}
 			.toast.visible {
 				max-height: 44px;
@@ -816,6 +820,25 @@
 			/* ── Settings ── */
 			.settings-wrap {
 				padding: 14px;
+				overflow-y: auto;
+				scrollbar-width: thin;
+				scrollbar-color: #b0c8e0 transparent;
+				scrollbar-gutter: stable;
+				flex: 1;
+			}
+			.settings-actions {
+				padding: 8px 14px 10px;
+				background: #fff;
+				border-top: 1px solid #eee;
+				flex-shrink: 0;
+				scrollbar-gutter: stable;
+			}
+			#viewSettings {
+				display: none;
+				flex-direction: column;
+			}
+			#viewSettings.active {
+				display: flex;
 			}
 			.section-title {
 				font-size: 10px;
@@ -891,7 +914,7 @@
 
 			/* ── Error ── */
 			.error-wrap {
-				padding: 16px;
+				padding: 14px;
 				text-align: center;
 			}
 
@@ -932,6 +955,124 @@
 				clip: rect(0, 0, 0, 0);
 				white-space: nowrap;
 				border: 0;
+			}
+
+			/* ── NipSelector ── */
+			#nipSelector {
+				flex-direction: column;
+			}
+			.nip-btn {
+				width: 100%;
+				padding: 6px 10px;
+				border: 1.5px solid #d0e4f0;
+				border-radius: 7px;
+				background: #f5f8fb;
+				color: #013f71;
+				font-size: 12px;
+				font-weight: 500;
+				cursor: pointer;
+				transition:
+					background 0.12s,
+					border-color 0.12s;
+				text-align: left;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				gap: 6px;
+			}
+			.nip-btn-label {
+				flex: 1;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+				min-width: 0;
+			}
+			.nip-btn:hover {
+				background: #e8f0f8;
+				border-color: #b0c8e0;
+			}
+			.nip-btn.active {
+				background: #013f71;
+				color: white;
+				border-color: #013f71;
+			}
+			.nip-btn.active:hover {
+				background: #012d52;
+			}
+			.nip-badge {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				background: #dc0032;
+				color: white;
+				font-size: 10px;
+				font-weight: 700;
+				border-radius: 8px;
+				min-width: 18px;
+				height: 16px;
+				padding: 0 5px;
+				flex-shrink: 0;
+				line-height: 1;
+			}
+			.nip-btn.active .nip-badge {
+				background: rgba(255, 255, 255, 0.3);
+			}
+			.nip-select {
+				width: 100%;
+				border: 1.5px solid #d0e4f0;
+				border-radius: 7px;
+				padding: 5px 8px;
+				font-size: 12px;
+				background: white;
+				color: #013f71;
+			}
+
+			/* ── NIP cards w ustawieniach ── */
+			/* ── NIP cards w ustawieniach ── */
+			.nip-card-name-input {
+				width: 100%;
+				border: 1px solid #b0c8e0;
+				border-radius: 7px;
+				padding: 7px 32px 7px 10px;
+				font-size: 11px;
+				font-family: inherit;
+				color: #013f71;
+				background: #edf2f7;
+				cursor: default;
+				outline: none;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+			.nip-card-name-input:not([readonly]) {
+				background: white;
+				border-color: #013f71;
+				color: #333;
+				cursor: text;
+				white-space: normal;
+				overflow: visible;
+			}
+			.nip-list-remove {
+				background: none;
+				border: 1px solid #e0e0e0;
+				border-radius: 5px;
+				color: #999;
+				font-size: 13px;
+				cursor: pointer;
+				padding: 0;
+				flex-shrink: 0;
+				align-self: stretch;
+				min-width: 28px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				transition:
+					background 0.12s,
+					border-color 0.12s;
+			}
+			.nip-list-remove:hover {
+				background: #ffebee;
+				border-color: #ffcdd2;
 			}
 		</style>
 	</head>
@@ -1119,6 +1260,9 @@
 					<span class="status-badge s-ok" id="pollStatus" aria-live="polite" aria-atomic="true">OK</span>
 				</div>
 
+				<!-- NipSelector – widoczny tylko przy 2+ NIP-ach -->
+				<div id="nipSelector" style="display: none; gap: 6px; margin-bottom: 8px"></div>
+
 				<div class="counter-row">
 					<div>
 						<span class="counter-num zero" id="invoiceCount">0</span>
@@ -1151,7 +1295,7 @@
 					</div>
 				</div>
 
-				<!-- Toast – tuż pod listą, wstrzymuje się na hover -->
+				<!-- Toast nakłada się na dolną krawędź listy faktur -->
 				<div class="toast" id="toast" role="status" aria-live="assertive" aria-atomic="true">
 					<span class="toast-msg" id="toastMsg"></span>
 					<button class="toast-undo" id="toastUndo">Cofnij</button>
@@ -1174,46 +1318,13 @@
 		<!-- VIEW: settings -->
 		<div class="view" id="viewSettings">
 			<div class="settings-wrap">
-				<div id="settingsCompany" style="display: none; position: relative; margin-bottom: 12px">
-					<input
-						type="text"
-						id="settingsCompanyInput"
-						readonly
-						aria-label="Nazwa firmy"
-						style="
-							width: 100%;
-							font-size: 12px;
-							color: #013f71;
-							font-family: inherit;
-							padding: 7px 32px 7px 10px;
-							background: #edf2f7;
-							border: 1px solid #b0c8e0;
-							border-radius: 7px;
-							cursor: default;
-							outline: none;
-							box-sizing: border-box;
-							overflow: hidden;
-							text-overflow: ellipsis;
-							white-space: nowrap;
-						"
-					/>
-					<span
-						id="settingsCompanyHint"
-						role="button"
-						tabindex="0"
-						aria-label="Edytuj nazwę firmy"
-						style="
-							position: absolute;
-							right: 8px;
-							top: 50%;
-							transform: translateY(-50%);
-							font-size: 12px;
-							cursor: pointer;
-						"
-						>✏️</span
-					>
-				</div>
+				<div class="section-title">Podpięte NIP-y</div>
+				<div id="nipListSettings" style="margin-bottom: 8px"></div>
+				<button class="btn btn-secondary" id="btnAddNip" style="width: 100%; margin-bottom: 10px">
+					+ Dodaj NIP
+				</button>
 
+				<hr class="sep" />
 				<div class="section-title">Polling</div>
 				<div class="setting-row">
 					<span class="setting-label"
@@ -1225,14 +1336,6 @@
 						<option value="360">Co 6 godzin</option>
 						<option value="720">Co 12 godzin</option>
 						<option value="1440">Raz dziennie</option>
-					</select>
-				</div>
-				<div class="setting-row">
-					<span class="setting-label">Środowisko KSeF</span>
-					<select class="setting-select" id="selectEnv" aria-label="Środowisko KSeF">
-						<option value="production">Produkcja</option>
-						<option value="demo">Demo (TR)</option>
-						<option value="test">Test (TE)</option>
 					</select>
 				</div>
 
@@ -1263,17 +1366,11 @@
 						<span class="toggle-slider"></span>
 					</label>
 				</div>
-
-				<hr class="sep" />
-				<div class="section-title">Bezpieczeństwo</div>
-				<p style="font-size: 11px; color: #888; margin-bottom: 10px; line-height: 1.5">
-					Token przechowywany zaszyfrowany AES-256-GCM.<br />
-					Klucz szyfrowania pochodzi wyłącznie z Twojego PIN-u.
-				</p>
-
-				<div style="display: flex; gap: 8px; margin-bottom: 8px">
+			</div>
+			<!-- Wszystkie przyciski akcji przyklejone do dołu, poza scrollowalnym settings-wrap -->
+			<div class="settings-actions">
+				<div style="display: flex; gap: 8px; margin-bottom: 6px">
 					<button class="btn btn-primary" id="btnSaveSettings" style="flex: 1">💾 Zapisz</button>
-					<button class="btn btn-danger" id="btnRemoveToken">🗑️ Usuń token</button>
 				</div>
 				<button class="btn btn-secondary" id="btnReinitArchive" style="width: 100%; margin-bottom: 6px">
 					🔄 Odśwież archiwum faktur
@@ -1331,7 +1428,7 @@
 
 		<script src="popup.js"></script>
 
-		<!-- Modal potwierdzenia usunięcia tokenu -->
+		<!-- Modal potwierdzenia usunięcia NIP -->
 		<div
 			id="confirmModal"
 			role="dialog"
@@ -1360,16 +1457,14 @@
 				<div
 					id="confirmModalTitle"
 					style="font-size: 13px; font-weight: 600; color: #1a1a2e; margin-bottom: 8px"
-				>
-					Usuń token i konfigurację?
-				</div>
-				<div style="font-size: 12px; color: #666; margin-bottom: 16px; line-height: 1.5">
-					Rozszerzenie przestanie działać. Będziesz musiał przejść onboarding od nowa.
-				</div>
+				></div>
+				<div
+					id="confirmModalDesc"
+					style="font-size: 12px; color: #666; margin-bottom: 16px; line-height: 1.5"
+				></div>
 				<div style="display: flex; gap: 8px; justify-content: flex-end">
 					<button
 						id="confirmCancel"
-						class="modal-btn"
 						style="
 							background: #f0f0f0;
 							border: none;
@@ -1384,7 +1479,6 @@
 					</button>
 					<button
 						id="confirmOk"
-						class="modal-btn"
 						style="
 							background: #c62828;
 							border: none;

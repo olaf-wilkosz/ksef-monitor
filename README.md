@@ -1,12 +1,13 @@
 # KSeF Monitor
 
-![Wersja](https://img.shields.io/github/manifest-json/v/olaf-wilkosz/ksef-monitor?filename=extension%2Fmanifest.json&branch=main&color=013f71&label=wersja) ![Licencja](https://img.shields.io/badge/licencja-MIT-green) ![Chrome](https://img.shields.io/badge/Chrome-88%2B-yellow)
+![Wersja](https://img.shields.io/github/manifest-json/v/olaf-wilkosz/ksef-monitor?filename=extension%2Fmanifest.json&branch=main&color=013f71&label=wersja) ![Licencja](https://img.shields.io/badge/licencja-MIT-green) ![Chrome](https://img.shields.io/badge/Chrome-88%2B-yellow) ![Firefox](https://img.shields.io/badge/Firefox-140%2B-orange)
 
-Rozszerzenie Chrome, które monitoruje nowe faktury zakupowe w Krajowym Systemie e-Faktur i powiadamia Cię gdy pojawi się coś nowego – bez logowania do portalu.
+Rozszerzenie przeglądarki, które monitoruje nowe faktury zakupowe w Krajowym Systemie e-Faktur i powiadamia Cię gdy pojawi się coś nowego – bez logowania do portalu.
 
 [![Dostępne w Chrome Web Store](store/cws-badge.png)](https://chromewebstore.google.com/detail/ksef-monitor/adfieckbhbajegaomloplmkiimcgamgk)
+[![Get the Add-on for Firefox](store/amo-badge.png)](https://addons.mozilla.org/pl/firefox/addon/ksef-monitor/)
 
-<img src="store/screenshots/promo-1400x560.png" width="900" alt="KSeF Monitor – monitoruj faktury w tle">
+<br><img src="store/screenshots/promo-1400x560.png" width="900" alt="KSeF Monitor – monitoruj faktury w tle">
 
 ---
 
@@ -16,15 +17,15 @@ Rozszerzenie Chrome, które monitoruje nowe faktury zakupowe w Krajowym Systemie
 - Pokazuje liczbę nieprzejrzanych faktur na ikonie w pasku przeglądarki
 - Wyświetla listę nowych faktur z nazwą wystawcy, numerem i kwotą
 - Wysyła powiadomienie push gdy przyjdzie nowa faktura (opcjonalnie)
-- Działa na środowiskach **Produkcja**, **Demo (TR)** i **Test (TE)**
+- Obsługuje **wiele NIP-ów** – przełączaj między działalnościami jednym kliknięciem
 
-<img src="store/screenshots/screenshot-5.png" width="900" alt="Działa z Krajowym Systemem e-Faktur – KSeF API 2.0">
+<br><img src="store/screenshots/screenshot-5.png" width="900" alt="Działa z Krajowym Systemem e-Faktur – KSeF API 2.0">
 
 ---
 
 ## Wymagania
 
-- Przeglądarka Chrome, Edge lub Brave (wersja 88+)
+- Przeglądarka Chrome, Edge lub Brave (wersja 88+) albo Firefox (wersja 140+)
 - Token KSeF z uprawnieniem **„przeglądanie faktur"** – wygenerujesz go w [portalu KSeF](https://ksef.podatki.gov.pl) w zakładce _Zarządzaj tokenami_
 
 ---
@@ -34,6 +35,10 @@ Rozszerzenie Chrome, które monitoruje nowe faktury zakupowe w Krajowym Systemie
 ### Ze sklepu Chrome Web Store
 
 Kliknij **Dodaj do Chrome** na [stronie rozszerzenia](https://chromewebstore.google.com/detail/ksef-monitor/adfieckbhbajegaomloplmkiimcgamgk).
+
+### Firefox Add-ons (AMO)
+
+Kliknij **Dodaj do Firefox** na [stronie rozszerzenia](https://addons.mozilla.org/pl/firefox/addon/ksef-monitor/).
 
 ### Ręcznie (tryb deweloperski)
 
@@ -49,22 +54,22 @@ Kliknij **Dodaj do Chrome** na [stronie rozszerzenia](https://chromewebstore.goo
 
 Po kliknięciu ikony pojawi się kreator w 3 krokach:
 
-**Krok 1 – Token i środowisko**
+**Krok 1 – Token**
 Wklej token KSeF skopiowany z portalu. NIP i nazwa firmy zostaną odczytane automatycznie.
 
 **Krok 2 – PIN**
-Ustaw PIN – to hasło, którym rozszerzenie szyfruje token lokalnie. Zapamiętaj go, bo będzie potrzebny przy ponownym logowaniu.
+Ustaw PIN – to hasło, którym rozszerzenie szyfruje token lokalnie. Zapamiętaj go, bo będzie potrzebny przy ponownym uruchomieniu przeglądarki.
 
 **Krok 3 – Test połączenia**
 Rozszerzenie sprawdza czy token działa i pobiera listę ostatnich faktur jako punkt wyjścia.
 
-<img src="store/screenshots/screenshot-3.png" width="900" alt="Konfiguracja zakończona – KSeF Monitor aktywny">
+<br><img src="store/screenshots/screenshot-3.png" width="900" alt="Konfiguracja zakończona – KSeF Monitor aktywny">
 
 ---
 
 ## Codzienne użycie
 
-<img src="store/screenshots/screenshot-1.png" width="900" alt="Lista faktur w KSeF Monitor"><br>
+<br><img src="store/screenshots/screenshot-1.png" width="900" alt="Lista faktur w KSeF Monitor"><br><br>
 
 **Ikona w pasku** pokazuje liczbę faktur wymagających uwagi. Kliknij ją by otworzyć listę.
 
@@ -84,32 +89,35 @@ Po oznaczeniu możesz cofnąć akcję przez **Cofnij** (masz 4 sekundy).
 
 **Sprawdź teraz** – wymusza natychmiastowe pobranie faktur poza harmonogramem.
 
+### Wiele NIP-ów
+
+Jeśli prowadzisz kilka działalności, możesz dodać tokeny dla każdego NIP-u. Przełącznik w głównym widoku pozwala błyskawicznie zmieniać kontekst. Każdy NIP ma niezależne faktury i historię, a jeden PIN zabezpiecza wszystkie tokeny.
+
 ---
 
 ## Ustawienia
 
 Otwórz rozszerzenie → ikona ⚙️ w prawym górnym rogu.
 
-<img src="store/screenshots/screenshot-2.png" width="900" alt="Konfiguracja KSeF Monitor – token i środowisko"><br>
+<br><img src="store/screenshots/screenshot-2.png" width="900" alt="Konfiguracja KSeF Monitor"><br>
 
-| Ustawienie           | Opis                                                      |
-| -------------------- | --------------------------------------------------------- |
-| Interwał sprawdzania | Co ile godzin rozszerzenie odpytuje KSeF (min. 1h)        |
-| Nowe przez ostatnie  | Faktury młodsze niż X dni trafiają do sekcji „Nowe"       |
-| Środowisko KSeF      | Produkcja / Demo / Test                                   |
-| Powiadomienia push   | Czy pokazywać powiadomienie systemowe przy nowej fakturze |
-| Odśwież archiwum     | Pobiera faktury od nowa (np. po przerwie)                 |
-| Usuń token           | Usuwa konfigurację i wraca do ekranu startowego           |
+| Ustawienie           | Opis                                                        |
+| -------------------- | ----------------------------------------------------------- |
+| Podpięte NIP-y       | Lista kont; edycja nazwy firmy, dodawanie i usuwanie NIP-ów |
+| Interwał sprawdzania | Co ile godzin rozszerzenie odpytuje KSeF (min. 1h)          |
+| Nowe przez ostatnie  | Faktury młodsze niż X dni trafiają do sekcji „Nowe"         |
+| Powiadomienia push   | Czy pokazywać powiadomienie systemowe przy nowej fakturze   |
+| Odśwież archiwum     | Pobiera faktury od nowa (np. po przerwie)                   |
 
 ---
 
 ## Bezpieczeństwo
 
-<img src="store/screenshots/screenshot-4.png" width="900" alt="Bezpieczeństwo – dane zostają na Twoim komputerze"><br>
+<br><img src="store/screenshots/screenshot-4.png" width="900" alt="Bezpieczeństwo – dane zostają na Twoim komputerze"><br><br>
 
 Token KSeF jest **szyfrowany lokalnie** algorytmem AES-256-GCM. Klucz szyfrowania pochodzi z Twojego PIN-u – rozszerzenie nigdy go nie przechowuje. Bez znajomości PIN-u zaszyfrowany token jest bezużyteczny.
 
-Rozszerzenie komunikuje się wyłącznie z `api.ksef.mf.gov.pl` (i odpowiednikami środowisk demo/test). Żadne dane nie są wysyłane do zewnętrznych serwerów.
+Rozszerzenie komunikuje się wyłącznie z `api.ksef.mf.gov.pl`. Żadne dane nie są wysyłane do zewnętrznych serwerów.
 
 ---
 
@@ -122,13 +130,10 @@ Nie. Rozszerzenie loguje się samodzielnie używając tokenu i utrzymuje sesję 
 Rozszerzenie pokazuje faktury od momentu instalacji. Starsze dostępne są bezpośrednio w portalu KSeF.
 
 **Zmieniłem token w portalu KSeF. Co robię?**
-Wejdź w ustawienia → _Usuń token_, a następnie przejdź przez konfigurację od nowa z nowym tokenem.
-
-**Co to jest PRD / TR / TE na ikonie?**
-Skrót aktualnego środowiska: PRD = Produkcja, TR = Demo, TE = Test.
+Wejdź w ustawienia → ikona 🗑️ przy NIP-ie, a następnie przejdź przez konfigurację od nowa z nowym tokenem.
 
 **Czy rozszerzenie działa na Firefoksie?**
-Jeszcze nie – Firefox będzie obsługiwany w kolejnej wersji.
+Tak, od wersji 1.0.3 KSeF Monitor jest dostępny również w Firefox Add-ons.
 
 ---
 
