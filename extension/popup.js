@@ -800,7 +800,9 @@ function bindEvents() {
 	document.getElementById('btnCheckNow').addEventListener('click', handleCheckNow);
 	document.getElementById('btnReinitArchive').addEventListener('click', handleReinitArchive);
 	document.getElementById('btnSettings').addEventListener('click', showSettingsView);
-	document.getElementById('btnSaveSettings').addEventListener('click', handleSaveSettings);
+	document.getElementById('selectInterval').addEventListener('change', autoSaveConfig);
+	document.getElementById('selectPendingDays').addEventListener('change', autoSaveConfig);
+	document.getElementById('toggleNotifications').addEventListener('change', autoSaveConfig);
 	document.getElementById('btnBackFromSettings').addEventListener('click', async () => {
 		await loadState();
 		renderMainView();
@@ -1193,11 +1195,11 @@ function showSettingsView() {
 	document.getElementById('toggleNotifications').checked = !!config.notificationsEnabled;
 	renderNipList();
 
-	// settings-wrap = 598 - header(42) - footer(30) - actions(102) = 424px
+	// settings-wrap = 600 - header(42) - footer(30) - actions(90) = 438px
 	const wrap = document.querySelector('.settings-wrap');
 	if (wrap) {
-		wrap.style.minHeight = '400px';
-		wrap.style.maxHeight = '400px';
+		wrap.style.minHeight = '438px';
+		wrap.style.maxHeight = '438px';
 	}
 
 	showView('viewSettings');
@@ -1295,14 +1297,7 @@ function renderNipList() {
 	});
 }
 
-async function handleSaveSettings() {
-	// jeśli nazwa firmy była w trakcie edycji – zapisujemy co jest w polu
-	const scInput = document.getElementById('settingsCompanyInput');
-	if (scInput && !scInput.readOnly) {
-		await saveSettingsCompanyName();
-	}
-
-	// Globalna konfiguracja
+async function autoSaveConfig() {
 	config.pollIntervalMinutes = parseInt(document.getElementById('selectInterval').value, 10);
 	config.pendingDaysThreshold = (() => {
 		const v = document.getElementById('selectPendingDays').value;
@@ -1311,12 +1306,6 @@ async function handleSaveSettings() {
 	config.notificationsEnabled = document.getElementById('toggleNotifications').checked;
 	await chrome.storage.local.set({ config });
 	await chrome.runtime.sendMessage({ type: 'UPDATE_INTERVAL', minutes: config.pollIntervalMinutes });
-
-	const labels = { production: 'PRD', demo: 'DEMO', test: 'TEST' };
-	document.getElementById('envLabel').textContent = labels[activeAccount()?.environment ?? 'production'] ?? 'PRD';
-
-	await loadState();
-	renderMainView();
 }
 
 async function handleRemoveNip(nip) {

@@ -819,7 +819,7 @@
 
 			/* ── Settings ── */
 			.settings-wrap {
-				padding: 14px;
+				padding: 14px 6px 14px 14px;
 				overflow-y: auto;
 				scrollbar-width: thin;
 				scrollbar-color: #b0c8e0 transparent;
@@ -827,7 +827,7 @@
 				flex: 1;
 			}
 			.settings-actions {
-				padding: 8px 14px 10px;
+				padding: 8px 6px 10px 14px;
 				background: #fff;
 				border-top: 1px solid #eee;
 				flex-shrink: 0;
@@ -1369,10 +1369,7 @@
 			</div>
 			<!-- Wszystkie przyciski akcji przyklejone do dołu, poza scrollowalnym settings-wrap -->
 			<div class="settings-actions">
-				<div style="display: flex; gap: 8px; margin-bottom: 6px">
-					<button class="btn btn-primary" id="btnSaveSettings" style="flex: 1">💾 Zapisz</button>
-				</div>
-				<button class="btn btn-secondary" id="btnReinitArchive" style="width: 100%; margin-bottom: 6px">
+				<button class="btn btn-primary" id="btnReinitArchive" style="width: 100%; margin-bottom: 6px">
 					🔄 Odśwież archiwum faktur
 				</button>
 				<div
